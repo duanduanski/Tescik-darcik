@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Kalkulator wag kształtowników</title>
+  <style>
+    :root{--bg:#0f1724;--card:#0b1220;--accent:#06b6d4;--muted:#94a3b8;color-scheme:dark}
+    html,body{height:100%;margin:0;font-family:Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; background:linear-gradient(180deg,#071026 0%, #071428 100%); color:#e6eef6; font-size:18px}
+    .wrap{max-width:980px;margin:32px auto;padding:24px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.02));border-radius:12px;box-shadow:0 6px 30px rgba(2,6,23,0.6)}
+    h1{margin:0 0 8px;font-size:26px}
+    p.lead{margin:0 0 18px;color:var(--muted);font-size:18px}
+    .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+    label{display:block;font-size:16px;color:var(--muted);margin-bottom:6px}
+    .card{background:var(--card);padding:18px;border-radius:10px}
+    input, select{width:100%;padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit;font-size:18px}
+    .result{font-size:20px;padding:12px;border-radius:8px;background:linear-gradient(180deg, rgba(6,182,212,0.06), rgba(6,182,212,0.03));color:#dff8fb}
+    footer{margin-top:18px;font-size:16px;color:var(--muted)}
+    button{padding:10px 14px;border-radius:8px;border:none;background:var(--accent);color:#022;cursor:pointer;font-size:18px}
+    @media (max-width:820px){.grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <h1>Kalkulator wag kształtowników</h1>
+    <p class="lead">Oblicza masę kształtowników (stal, aluminium, poliamid) dla kilku typów przekrojów. Wszystkie wymiary, w tym długość, podawaj w milimetrach (mm).</p>
+
+    <div class="grid">
+      <div class="card">
+        <label>Materiał</label>
+        <select id="material">
+          <option value="7850">Stal — 7850 kg/m³ (domyślnie)</option>
+          <option value="2700">Aluminium — 2700 kg/m³</option>
+          <option value="1150">Poliamid — 1150 kg/m³</option>
+          <option value="custom">Własna gęstość...</option>
+        </select>
+        <div id="customDensityRow" style="display:none;margin-top:10px">
+          <label>Gęstość (kg/m³)</label>
+          <input id="customDensity" type="number" min="0" step="1" value="2000">
+        </div>
+
+        <hr style="margin:12px 0;border:none;border-top:1px solid rgba(255,255,255,0.03)">
+
+        <label>Typ przekroju</label>
+        <select id="profileType">
+          <option value="rect">Prostokątny — pełny</option>
+          <option value="rect_hollow">Prostokątny — rura (pusty)</option>
+          <option value="round">Okrągły — pełny</option>
+          <option value="round_hollow">Okrągły — rura (pusty)</option>
+          <option value="angle">Kątownik (L)</option>
+          <option value="i-beam">Dwuteownik (I)</option>
+        </select>
+
+        <div id="params" style="margin-top:12px"></div>
+
+        <div style="margin-top:12px">
+          <label>Długość (mm)</label>
+          <input id="length" type="number" min="0" step="0.1" value="1000">
+        </div>
+
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button id="calculate">Oblicz</button>
+          <button id="reset" type="button">Wyczyść</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="result" id="mass">Masa: — kg</div>
+        <div class="result" style="margin-top:10px" id="volume">Objętość: — cm³</div>
+        <div class="result" style="margin-top:10px" id="area">Pole przekroju: — mm²</div>
+        <div style="margin-top:12px;font-size:16px;color:var(--muted)" id="detail">–</div>
+      </div>
+    </div>
+
+    <footer>Wszystkie wymiary podawaj w milimetrach. Wyniki przeliczane są do jednostek SI (masa w kg, objętość w cm³).</footer>
+  </main>
+
+  <script>
+    const params = document.getElementById('params');
+    const profileType = document.getElementById('profileType');
+    const material = document.getElementById('material');
+    const customDensityRow = document.getElementById('customDensityRow');
+    const customDensity = document.getElementById('customDensity');
+
+    function setParamsHTML(type){
+      let html = '';
+      if(type === 'rect'){
+        html = `<label>Szerokość B (mm)</label><input id="B" type="number" value="50"><label>Wysokość H (mm)</label><input id="H" type="number" value="20">`;
+      } else if(type === 'rect_hollow'){
+        html = `<label>Zewnętrzna szer. B (mm)</label><input id="B" type="number" value="60"><label>Zewnętrzna wys. H (mm)</label><input id="H" type="number" value="40"><label>Grubość ścianki t (mm)</label><input id="t" type="number" value="3">`;
+      } else if(type === 'round'){
+        html = `<label>Średnica D (mm)</label><input id="D" type="number" value="20">`;
+      } else if(type === 'round_hollow'){
+        html = `<label>Zewnętrzna średnica D (mm)</label><input id="D" type="number" value="40"><label>Średnica wewnętrzna d (mm)</label><input id="d" type="number" value="30">`;
+      } else if(type === 'angle'){
+        html = `<label>Noga a (mm)</label><input id="a" type="number" value="50"><label>Noga b (mm)</label><input id="b" type="number" value="50"><label>Grubość t (mm)</label><input id="t" type="number" value="5">`;
+      } else if(type === 'i-beam'){
+        html = `<label>Wysokość H (mm)</label><input id="H" type="number" value="200"><label>Szerokość półki B (mm)</label><input id="B" type="number" value="100"><label>Grubość półki Tf (mm)</label><input id="Tf" type="number" value="12"><label>Grubość środnika Tw (mm)</label><input id="Tw" type="number" value="8">`;
+      }
+      params.innerHTML = html;
+    }
+
+    setParamsHTML(profileType.value);
+
+    profileType.addEventListener('change', ()=> setParamsHTML(profileType.value));
+
+    material.addEventListener('change', ()=>{
+      customDensityRow.style.display = material.value === 'custom' ? 'block' : 'none';
+    });
+
+    document.getElementById('calculate').addEventListener('click', compute);
+    document.getElementById('reset').addEventListener('click', ()=>{
+      profileType.value = 'rect';
+      material.value = '7850';
+      customDensityRow.style.display = 'none';
+      customDensity.value = 2000;
+      setParamsHTML('rect');
+      document.getElementById('length').value = 1000;
+      document.getElementById('mass').textContent = 'Masa: — kg';
+      document.getElementById('volume').textContent = 'Objętość: — cm³';
+      document.getElementById('area').textContent = 'Pole przekroju: — mm²';
+      document.getElementById('detail').textContent = '–';
+    });
+
+    function compute(){
+      const type = profileType.value;
+      const length_mm = parseFloat(document.getElementById('length').value) || 0;
+      const length_m = length_mm / 1000; // przeliczenie na metry dla masy
+      let density = material.value === 'custom' ? parseFloat(customDensity.value) : parseFloat(material.value);
+
+      let area_mm2 = 0;
+      let details = '';
+
+      if(type === 'rect'){
+        const B = parseFloat(document.getElementById('B').value) || 0;
+        const H = parseFloat(document.getElementById('H').value) || 0;
+        area_mm2 = B * H;
+        details = `Prostokątny pełny: B=${B} mm, H=${H} mm`;
+      } else if(type === 'rect_hollow'){
+        const B = parseFloat(document.getElementById('B').value) || 0;
+        const H = parseFloat(document.getElementById('H').value) || 0;
+        const t = parseFloat(document.getElementById('t').value) || 0;
+        const Bi = Math.max(B - 2*t, 0);
+        const Hi = Math.max(H - 2*t, 0);
+        area_mm2 = Math.max(B*H - Bi*Hi, 0);
+        details = `Rura prostokątna: B=${B} mm, H=${H} mm, t=${t} mm`;
+      } else if(type === 'round'){
+        const D = parseFloat(document.getElementById('D').value) || 0;
+        area_mm2 = Math.PI * (D/2)**2;
+        details = `Okrągły pełny: D=${D} mm`;
+      } else if(type === 'round_hollow'){
+        const D = parseFloat(document.getElementById('D').value) || 0;
+        const d = parseFloat(document.getElementById('d').value) || 0;
+        area_mm2 = Math.PI * ((D/2)**2 - (d/2)**2);
+        details = `Rura okrągła: D=${D} mm, d=${d} mm`;
+      } else if(type === 'angle'){
+        const a = parseFloat(document.getElementById('a').value) || 0;
+        const b = parseFloat(document.getElementById('b').value) || 0;
+        const t = parseFloat(document.getElementById('t').value) || 0;
+        area_mm2 = Math.max(a*t + b*t - t*t, 0);
+        details = `Kątownik: a=${a} mm, b=${b} mm, t=${t} mm`;
+      } else if(type === 'i-beam'){
+        const H = parseFloat(document.getElementById('H').value) || 0;
+        const B = parseFloat(document.getElementById('B').value) || 0;
+        const Tf = parseFloat(document.getElementById('Tf').value) || 0;
+        const Tw = parseFloat(document.getElementById('Tw').value) || 0;
+        const webH = Math.max(H - 2*Tf, 0);
+        area_mm2 = Math.max(2*(B*Tf) + Tw*webH, 0);
+        details = `Dwuteownik: H=${H} mm, B=${B} mm, Tf=${Tf} mm, Tw=${Tw} mm`;
+      }
+
+      const area_m2 = area_mm2 * 1e-6;
+      const volume_m3 = area_m2 * length_m;
+      const volume_cm3 = volume_m3 * 1e6; // konwersja na cm³
+      const mass_kg = volume_m3 * density;
+
+      document.getElementById('area').textContent = `Pole przekroju: ${area_mm2.toFixed(2)} mm²`;
+      document.getElementById('volume').textContent = `Objętość: ${volume_cm3.toFixed(2)} cm³`;
+      document.getElementById('mass').textContent = `Masa: ${mass_kg.toFixed(3)} kg`;
+      document.getElementById('detail').textContent = `${details}. Długość=${length_mm} mm, gęstość=${density} kg/m³`;
+    }
+  </script>
+</body>
+</html>

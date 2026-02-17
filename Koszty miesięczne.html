@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Koszty Miesięczne</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <style>
+        :root {
+            --primary: #4F46E5;
+            --primary-dark: #4338ca;
+            --bg: #F3F4F6;
+            --surface: #ffffff;
+            --text: #1F2937;
+            --danger: #EF4444;
+            --success: #10B981;
+            --gray: #9CA3AF;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg);
+            color: var(--text);
+            padding-bottom: 80px;
+        }
+
+        .export-mode .no-export { display: none !important; }
+        .export-mode { padding: 20px; background: white; }
+
+        /* --- NAGŁÓWEK --- */
+        header {
+            background: var(--surface);
+            padding: 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        h1 {
+            margin: 0 0 10px 0;
+            font-size: 1.25rem;
+            text-align: center;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .list-controls { display: flex; gap: 8px; }
+        select { flex-grow: 1; padding: 8px; border-radius: 6px; border: 1px solid #ccc; font-size: 1rem; background: white; }
+        .btn-icon { width: 40px; border: none; border-radius: 6px; font-size: 1.2rem; cursor: pointer; color: white; display: flex; align-items: center; justify-content: center;}
+        .btn-add-list { background-color: var(--success); }
+        .btn-del-list { background-color: var(--danger); }
+
+        .container { max-width: 600px; margin: 0 auto; padding: 15px; }
+
+        /* --- FORMULARZ --- */
+        .add-form {
+            background: var(--surface);
+            padding: 15px;
+            border-radius: 12px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .input-row { display: flex; gap: 10px; }
+        input { padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 1rem; width: 100%; }
+        .btn-main { padding: 12px; background-color: var(--primary); color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
+
+        /* --- LISTA --- */
+        #captureArea { background: var(--bg); border-radius: 8px; }
+        .list-header-print { display: none; text-align: center; margin-bottom: 20px; }
+        
+        ul { list-style: none; padding: 0; margin: 0; }
+
+        li {
+            background: var(--surface);
+            margin-bottom: 10px;
+            padding: 15px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            transition: background-color 0.2s;
+        }
+
+        /* Styl dla "odfajkowanej" pozycji */
+        li.checked {
+            background-color: #f9fafb;
+        }
+        li.checked .item-name, 
+        li.checked .item-cost {
+            text-decoration: line-through;
+            color: var(--gray);
+        }
+
+        .drag-handle { color: #9CA3AF; cursor: move; padding-right: 10px; font-size: 1.2rem; }
+        
+        /* Checkbox customowy */
+        .check-container {
+            display: flex;
+            align-items: center;
+            padding-right: 15px;
+        }
+        .custom-checkbox {
+            width: 22px;
+            height: 22px;
+            cursor: pointer;
+            accent-color: var(--success);
+        }
+
+        .content { flex-grow: 1; display: flex; flex-direction: column; }
+        .item-name { font-weight: 500; font-size: 1rem; }
+        .item-cost { color: var(--primary); font-weight: bold; font-size: 1.1rem; }
+        li.checked .item-cost { color: var(--gray); } /* Nadpisanie koloru ceny gdy checked */
+
+        .actions { display: flex; gap: 8px; }
+        .btn-action { background: none; border: none; font-size: 1.2rem; padding: 5px; cursor: pointer; }
+
+        /* --- SUMA --- */
+        .summary-card {
+            background: var(--surface);
+            padding: 15px;
+            border-radius: 12px;
+            margin-top: 20px;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+        .total-amount { font-size: 2rem; font-weight: 800; color: var(--text); margin: 5px 0; }
+        
+        .export-controls { display: flex; gap: 10px; margin-top: 20px; }
+        .btn-outline { flex: 1; padding: 10px; background: transparent; border: 2px solid var(--primary); color: var(--primary); border-radius: 8px; font-weight: 600; cursor: pointer; }
+
+        /* --- MODAL --- */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5); display: none;
+            align-items: center; justify-content: center; z-index: 1000;
+        }
+        .modal { background: white; padding: 20px; border-radius: 12px; width: 90%; max-width: 400px; }
+        .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>📊 Koszty Miesięczne</h1>
+        <div class="list-controls">
+            <select id="listSelector" onchange="switchList()"></select>
+            <button class="btn-icon btn-add-list" onclick="addNewList()">+</button>
+            <button class="btn-icon btn-del-list" onclick="deleteCurrentList()">🗑️</button>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="add-form no-export">
+            <input type="text" id="newName" placeholder="Nazwa (np. Zakupy)" />
+            <div class="input-row">
+                <input type="number" id="newAmount" placeholder="0.00" step="0.01" />
+                <button class="btn-main" onclick="addItem()">Dodaj</button>
+            </div>
+        </div>
+
+        <div id="captureArea">
+            <h2 class="list-header-print" id="printHeader">Raport Kosztów</h2>
+            <ul id="itemsList"></ul>
+            
+            <div class="summary-card">
+                <div class="total-label" style="color:#6B7280; font-size:0.9rem;">SUMA CAŁKOWITA</div>
+                <div class="total-amount" id="totalAmount">0.00 zł</div>
+            </div>
+        </div>
+
+        <div class="export-controls no-export">
+            <button class="btn-outline" onclick="exportToImage()">📸 JPEG</button>
+            <button class="btn-outline" onclick="exportToPDF()">📄 PDF</button>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="editModal">
+        <div class="modal">
+            <h3>Edytuj pozycję</h3>
+            <input type="text" id="editName" placeholder="Nazwa" style="margin-bottom: 10px;">
+            <input type="number" id="editAmount" placeholder="Kwota" step="0.01">
+            <input type="hidden" id="editId">
+            <div class="modal-actions">
+                <button class="btn-outline" onclick="closeModal()" style="border-color:#ccc; color:#666;">Anuluj</button>
+                <button class="btn-main" onclick="saveEdit()">Zapisz</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- LOGIKA APLIKACJI ---
+        const STORAGE_KEY = 'monthlyCostsDB_v3';
+        let db = {
+            currentListId: 'default',
+            lists: [{ id: 'default', name: 'Moja Lista', items: [] }]
+        };
+
+        function init() {
+            const data = localStorage.getItem(STORAGE_KEY);
+            if (data) {
+                db = JSON.parse(data);
+                // Migracja danych dla starych wersji (dodanie pola checked jeśli nie istnieje)
+                db.lists.forEach(list => {
+                    list.items.forEach(item => {
+                        if (typeof item.checked === 'undefined') item.checked = false;
+                    });
+                });
+            }
+            populateListSelector();
+            renderList();
+
+            new Sortable(document.getElementById('itemsList'), {
+                handle: '.drag-handle',
+                animation: 150,
+                onEnd: function (evt) {
+                    const list = getCurrentList();
+                    const item = list.items.splice(evt.oldIndex, 1)[0];
+                    list.items.splice(evt.newIndex, 0, item);
+                    saveDB();
+                }
+            });
+        }
+
+        function saveDB() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+        }
+
+        function getCurrentList() {
+            return db.lists.find(l => l.id === db.currentListId) || db.lists[0];
+        }
+
+        function populateListSelector() {
+            const selector = document.getElementById('listSelector');
+            selector.innerHTML = '';
+            db.lists.forEach(list => {
+                const option = document.createElement('option');
+                option.value = list.id;
+                option.textContent = list.name;
+                if (list.id === db.currentListId) option.selected = true;
+                selector.appendChild(option);
+            });
+        }
+
+        function switchList() {
+            db.currentListId = document.getElementById('listSelector').value;
+            saveDB();
+            renderList();
+        }
+
+        function addNewList() {
+            const name = prompt("Podaj nazwę nowej listy:");
+            if (name) {
+                const newList = { id: 'list_' + Date.now(), name: name, items: [] };
+                db.lists.push(newList);
+                db.currentListId = newList.id;
+                saveDB();
+                populateListSelector();
+                renderList();
+            }
+        }
+
+        function deleteCurrentList() {
+            if (db.lists.length <= 1) return alert("Nie możesz usunąć ostatniej listy.");
+            if (confirm("Usunąć bieżącą listę?")) {
+                const index = db.lists.findIndex(l => l.id === db.currentListId);
+                db.lists.splice(index, 1);
+                db.currentListId = db.lists[0].id;
+                saveDB();
+                populateListSelector();
+                renderList();
+            }
+        }
+
+        function addItem() {
+            const nameInput = document.getElementById('newName');
+            const amountInput = document.getElementById('newAmount');
+            const name = nameInput.value.trim();
+            const amount = parseFloat(amountInput.value);
+
+            if (name && !isNaN(amount)) {
+                getCurrentList().items.push({
+                    id: Date.now(),
+                    name: name,
+                    amount: amount,
+                    checked: false // Domyślnie nieprzekreślone
+                });
+                saveDB();
+                renderList();
+                nameInput.value = ''; amountInput.value = ''; nameInput.focus();
+            } else {
+                alert("Błędne dane");
+            }
+        }
+
+        function deleteItem(id) {
+            const list = getCurrentList();
+            list.items = list.items.filter(item => item.id !== id);
+            saveDB();
+            renderList();
+        }
+
+        function toggleCheck(id) {
+            const list = getCurrentList();
+            const item = list.items.find(i => i.id === id);
+            if (item) {
+                item.checked = !item.checked;
+                saveDB();
+                renderList();
+            }
+        }
+
+        function openEditModal(id) {
+            const item = getCurrentList().items.find(i => i.id === id);
+            if (item) {
+                document.getElementById('editId').value = id;
+                document.getElementById('editName').value = item.name;
+                document.getElementById('editAmount').value = item.amount;
+                document.getElementById('editModal').style.display = 'flex';
+            }
+        }
+        function closeModal() { document.getElementById('editModal').style.display = 'none'; }
+
+        function saveEdit() {
+            const id = parseInt(document.getElementById('editId').value);
+            const name = document.getElementById('editName').value;
+            const amount = parseFloat(document.getElementById('editAmount').value);
+            if (name && !isNaN(amount)) {
+                const item = getCurrentList().items.find(i => i.id === id);
+                if (item) { item.name = name; item.amount = amount; saveDB(); renderList(); closeModal(); }
+            }
+        }
+
+        function renderList() {
+            const list = getCurrentList();
+            const ul = document.getElementById('itemsList');
+            const totalEl = document.getElementById('totalAmount');
+            document.getElementById('printHeader').textContent = `Raport: ${list.name}`;
+            
+            ul.innerHTML = '';
+            let total = 0;
+
+            list.items.forEach(item => {
+                total += item.amount;
+                const li = document.createElement('li');
+                // Jeśli zaznaczone, dodaj klasę .checked
+                if (item.checked) li.classList.add('checked');
+
+                li.innerHTML = `
+                    <div class="drag-handle no-print">☰</div>
+                    <div class="check-container">
+                        <input type="checkbox" class="custom-checkbox" 
+                            ${item.checked ? 'checked' : ''} 
+                            onclick="toggleCheck(${item.id})">
+                    </div>
+                    <div class="content">
+                        <span class="item-name">${item.name}</span>
+                        <span class="item-cost">${item.amount.toFixed(2)} zł</span>
+                    </div>
+                    <div class="actions no-export">
+                        <button class="btn-action" onclick="openEditModal(${item.id})">✏️</button>
+                        <button class="btn-action" style="color:var(--danger)" onclick="deleteItem(${item.id})">🗑️</button>
+                    </div>
+                `;
+                ul.appendChild(li);
+            });
+            totalEl.textContent = total.toFixed(2) + " zł";
+        }
+
+        // --- EXPORT ---
+        async function prepareForExport() {
+            document.body.classList.add('export-mode');
+            document.querySelector('.list-header-print').style.display = 'block';
+            // Ukryj uchwyty do przeciągania podczas exportu dla czystszego wyglądu
+            document.querySelectorAll('.drag-handle').forEach(el => el.style.display = 'none');
+            await new Promise(r => setTimeout(r, 100));
+        }
+
+        function cleanupAfterExport() {
+            document.body.classList.remove('export-mode');
+            document.querySelector('.list-header-print').style.display = 'none';
+            document.querySelectorAll('.drag-handle').forEach(el => el.style.display = 'block');
+        }
+
+        function exportToImage() {
+            prepareForExport().then(() => {
+                html2canvas(document.getElementById('captureArea'), { scale: 2 }).then(canvas => {
+                    const link = document.createElement('a');
+                    link.download = `koszty-${getCurrentList().name}.jpg`;
+                    link.href = canvas.toDataURL("image/jpeg", 0.9);
+                    link.click();
+                    cleanupAfterExport();
+                });
+            });
+        }
+
+        function exportToPDF() {
+            prepareForExport().then(() => {
+                html2canvas(document.getElementById('captureArea'), { scale: 2 }).then(canvas => {
+                    const imgData = canvas.toDataURL('image/jpeg', 1.0);
+                    const pdf = new jspdf.jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+                    const props = pdf.getImageProperties(imgData);
+                    const pdfWidth = pdf.internal.pageSize.getWidth();
+                    const pdfHeight = (props.height * pdfWidth) / props.width;
+                    pdf.addImage(imgData, 'JPEG', 0, 10, pdfWidth, pdfHeight);
+                    pdf.save(`koszty-${getCurrentList().name}.pdf`);
+                    cleanupAfterExport();
+                });
+            });
+        }
+
+        init();
+    </script>
+</body>
+</html>

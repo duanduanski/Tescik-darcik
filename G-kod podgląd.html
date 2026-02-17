@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>G-code Visualizer</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 0; }
+        canvas { display: block; margin: auto; }
+        #viewer { width: 100%; height: 400px; margin: auto; max-width: 600px; }
+        input { width: 90%; max-width: 300px; margin: 10px 0; }
+        #dimensions { white-space: pre-line; }
+        #gcodePreview { width: 90%; max-width: 600px; height: 300px; overflow-y: scroll; border: 1px solid #ccc; padding: 10px; margin: 10px auto; text-align: left; background: #f9f9f9; }
+    </style>
+</head>
+<body>
+    <h2>Wczytaj plik G-code</h2>
+    <input type="file" id="gcodeInput" accept=".gcode">
+    <p id="dimensions"></p>
+    <div id="viewer"></div>
+    <h3>Podgląd G-code</h3>
+    <div id="gcodePreview"></div>
+    
+    <script>
+        document.getElementById('gcodeInput').addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const gcode = e.target.result.split('\n');
+                document.getElementById('gcodePreview').innerText = gcode.join('\n');
+                
+                let minX = Infinity, minY = Infinity, minZ = Infinity;
+                let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+                let x = 0, y = 0, z = 0;
+                let pointsG0 = [], pointsG1 = [];
+                let modalG = "G0";
+                let variables = {};
+                
+                gcode.forEach(line => {
+                    line = line.trim();
+                    if (line.startsWith("#")) {
+                        const matchVar = line.match(/#(\d+)\s*=\s*(-?\d*\.?\d*)/);
+                        if (matchVar) {
+                            variables[`#${matchVar[1]}`] = parseFloat(matchVar[2]);
+                        }
+                    }
+                    
+                    Object.keys(variables).forEach(varName => {
+                        const regex = new RegExp(`\${varName}`, 'g');
+                        line = line.replace(regex, variables[varName]);
+                    });
+                    
+                    if (line.match(/G(0|1|81|82|83|84)/)) {
+                        const matchG = line.match(/G(\d+)/);
+                        if (matchG) modalG = "G" + matchG[1];
+                    }
+                    
+                    const matchX = line.match(/X(-?\d*\.?\d*)/);
+                    const matchY = line.match(/Y(-?\d*\.?\d*)/);
+                    const matchZ = line.match(/Z(-?\d*\.?\d*)/);
+                    
+                    if (matchX) x = parseFloat(matchX[1]);
+                    if (matchY) y = parseFloat(matchY[1]);
+                    if (matchZ) z = parseFloat(matchZ[1]);
+                    
+                    minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+                    minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+                    minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z);
+                    
+                    if (modalG === "G0") {
+                        pointsG0.push(new THREE.Vector3(x, y, z));
+                    } else {
+                        pointsG1.push(new THREE.Vector3(x, y, z));
+                    }
+                });
+                
+                document.getElementById('dimensions').innerText = `X min ${minX} X max ${maxX}\nY min ${minY} Y max ${maxY}\nZ min ${minZ} Z max ${maxZ}`;
+                renderGCode(pointsG0, pointsG1);
+            };
+            reader.readAsText(file);
+        });
+        
+        function renderGCode(pointsG0, pointsG1) {
+            const scene = new THREE.Scene();
+            const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            const renderer = new THREE.WebGLRenderer();
+            renderer.setSize(window.innerWidth * 0.9, 400);
+            document.getElementById('viewer').innerHTML = '';
+            document.getElementById('viewer').appendChild(renderer.domElement);
+            
+            if (pointsG0.length > 0) {
+                const materialG0 = new THREE.LineBasicMaterial({ color: 0xff0000 });
+                const geometryG0 = new THREE.BufferGeometry().setFromPoints(pointsG0);
+                const lineG0 = new THREE.Line(geometryG0, materialG0);
+                scene.add(lineG0);
+            }
+            
+            if (pointsG1.length > 0) {
+                const materialG1 = new THREE.LineBasicMaterial({ color: 0x00ff00 });
+                const geometryG1 = new THREE.BufferGeometry().setFromPoints(pointsG1);
+                const lineG1 = new THREE.Line(geometryG1, materialG1);
+                scene.add(lineG1);
+            }
+            
+            const controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.screenSpacePanning = false;
+            controls.minDistance = 10;
+            controls.maxDistance = 500;
+            controls.enableRotate = true;
+            controls.enableZoom = true;
+            
+            camera.position.set(0, 0, 100);
+            camera.lookAt(0, 0, 0);
+            
+            function animate() {
+                requestAnimationFrame(animate);
+                controls.update();
+                renderer.render(scene, camera);
+            }
+            animate();
+        }
+    </script>
+</body>
+</html>

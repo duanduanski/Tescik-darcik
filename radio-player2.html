@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Radio Player - Polskie Stacje Radiowe</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      color: white;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 1024px;
+    }
+
+    .radio-player {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(20px);
+      border-radius: 24px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .header {
+      background: linear-gradient(90deg, #2563eb 0%, #06b6d4 100%);
+      padding: 32px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .header-icon {
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .header h1 {
+      font-size: 32px;
+      font-weight: bold;
+      margin: 0;
+      line-height: 1;
+    }
+
+    .header p {
+      font-size: 18px;
+      color: rgba(255, 255, 255, 0.8);
+      margin-top: 4px;
+    }
+
+    .content {
+      padding: 32px;
+    }
+
+    .now-playing {
+      background: linear-gradient(90deg, rgba(37, 99, 235, 0.2) 0%, rgba(6, 182, 212, 0.2) 100%);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 32px;
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      display: none;
+    }
+
+    .now-playing.active {
+      display: block;
+    }
+
+    .now-playing-content {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+    }
+
+    .now-playing-info h2 {
+      font-size: 28px;
+      font-weight: bold;
+      margin-bottom: 8px;
+    }
+
+    .now-playing-info p {
+      color: #06b6d4;
+      font-size: 14px;
+    }
+
+    .now-playing-label {
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 12px;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .play-button {
+      background: white;
+      color: #2563eb;
+      border: none;
+      border-radius: 50%;
+      width: 80px;
+      height: 80px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 32px;
+      transition: all 0.3s ease;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+    }
+
+    .play-button:hover {
+      transform: scale(1.1);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
+    }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-top: 24px;
+    }
+
+    .volume-button {
+      background: none;
+      border: none;
+      color: white;
+      cursor: pointer;
+      font-size: 20px;
+      transition: color 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .volume-button:hover {
+      color: #06b6d4;
+    }
+
+    .volume-slider {
+      flex: 1;
+      height: 8px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.2);
+      -webkit-appearance: none;
+      appearance: none;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .volume-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: white;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    }
+
+    .volume-slider::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      border: none;
+      border-radius: 50%;
+      background: white;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    }
+
+    .volume-value {
+      font-size: 14px;
+      font-weight: 500;
+      min-width: 48px;
+      text-align: right;
+    }
+
+    .stations-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+      margin-top: 32px;
+    }
+
+    @media (max-width: 768px) {
+      .stations-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .station-card {
+      background: rgba(255, 255, 255, 0.1);
+      border: none;
+      border-radius: 12px;
+      padding: 24px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      text-align: left;
+    }
+
+    .station-card:hover {
+      background: rgba(255, 255, 255, 0.15);
+      transform: scale(1.05);
+    }
+
+    .station-card.active {
+      background: linear-gradient(90deg, #2563eb 0%, #06b6d4 100%);
+      box-shadow: 0 8px 24px rgba(37, 99, 235, 0.3);
+    }
+
+    .station-info h3 {
+      font-size: 18px;
+      font-weight: bold;
+      margin-bottom: 8px;
+    }
+
+    .station-info p {
+      font-size: 14px;
+      color: rgba(255, 255, 255, 0.6);
+    }
+
+    .station-card.active .station-info p {
+      color: rgba(255, 255, 255, 0.8);
+    }
+
+    .station-icon {
+      font-size: 24px;
+      margin-left: 16px;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .station-card:hover .station-icon {
+      opacity: 0.6;
+    }
+
+    .station-card.active .station-icon {
+      opacity: 1;
+    }
+
+    .equalizer {
+      display: flex;
+      gap: 4px;
+    }
+
+    .equalizer-bar {
+      width: 3px;
+      height: 24px;
+      background: white;
+      border-radius: 2px;
+      animation: pulse 0.6s ease-in-out infinite;
+    }
+
+    .equalizer-bar:nth-child(1) {
+      animation-delay: 0ms;
+    }
+
+    .equalizer-bar:nth-child(2) {
+      animation-delay: 150ms;
+    }
+
+    .equalizer-bar:nth-child(3) {
+      animation-delay: 300ms;
+    }
+
+    @keyframes pulse {
+      0%, 100% {
+        transform: scaleY(0.5);
+        opacity: 0.7;
+      }
+      50% {
+        transform: scaleY(1);
+        opacity: 1;
+      }
+    }
+
+    .footer {
+      text-align: center;
+      margin-top: 24px;
+      color: rgba(255, 255, 255, 0.4);
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <audio id="audioPlayer"></audio>
+
+  <div class="container">
+    <div class="radio-player">
+      <div class="header">
+        <div class="header-icon">📻</div>
+        <div>
+          <h1>Radio Player</h1>
+          <p>Twoje ulubione stacje radiowe w jednym miejscu</p>
+        </div>
+      </div>
+
+      <div class="content">
+        <div class="now-playing" id="nowPlaying">
+          <div class="now-playing-label">Teraz odtwarzane</div>
+          <div class="now-playing-content">
+            <div class="now-playing-info">
+              <h2 id="stationName"></h2>
+              <p id="stationGenre"></p>
+            </div>
+            <button class="play-button" id="mainPlayButton" onclick="togglePlay()">
+              ▶
+            </button>
+          </div>
+          <div class="controls">
+            <button class="volume-button" id="volumeToggle" onclick="toggleMute()">🔊</button>
+            <input type="range" id="volumeSlider" class="volume-slider" min="0" max="100" value="70" oninput="handleVolumeChange(this.value)">
+            <span class="volume-value" id="volumeValue">70%</span>
+          </div>
+        </div>
+
+        <div class="stations-grid" id="stationsGrid"></div>
+      </div>
+    </div>
+
+    <div class="footer">
+      Wybierz stację, aby rozpocząć odtwarzanie
+    </div>
+  </div>
+
+  <script>
+    const stations = [
+      { name: 'RMF FM', url: 'http://195.150.20.7/rmf_fm', genre: 'Pop' },
+      { name: 'RMF MAXX', url: 'https://rs6-krk2.rmfstream.pl/rmf_maxxx', genre: 'Dance' },
+      { name: 'RMF 24', url: 'http://195.150.20.7/rmf_24', genre: 'Wiadomości' },
+      { name: 'Radio ZET', url: 'http://zet090-02.cdn.eurozet.pl:8404/', genre: 'Pop' },
+      { name: 'Radio ESKA', url: 'https://ic1.smcdn.pl/2380-1.mp3', genre: 'Pop/Dance' },
+      { name: 'Radio WIELKOPOLSKA', url: 'http://217.182.76.63:8000/webstream', genre: 'Rock' },
+    ];
+
+    let currentStation = null;
+    let isPlaying = false;
+    let isMuted = false;
+    let currentVolume = 70;
+
+    const audioPlayer = document.getElementById('audioPlayer');
+    const stationsGrid = document.getElementById('stationsGrid');
+    const nowPlaying = document.getElementById('nowPlaying');
+    const mainPlayButton = document.getElementById('mainPlayButton');
+    const volumeSlider = document.getElementById('volumeSlider');
+    const volumeValue = document.getElementById('volumeValue');
+    const volumeToggle = document.getElementById('volumeToggle');
+    const stationName = document.getElementById('stationName');
+    const stationGenre = document.getElementById('stationGenre');
+
+    function renderStations() {
+      stationsGrid.innerHTML = stations.map(station => `
+        <button class="station-card" onclick="playStation('${station.url}', '${station.name}', '${station.genre}')">
+          <div class="station-info">
+            <h3>${station.name}</h3>
+            <p>${station.genre}</p>
+          </div>
+          <div class="station-icon">
+            ${currentStation?.url === station.url && isPlaying ?
+              `<div class="equalizer">
+                <div class="equalizer-bar"></div>
+                <div class="equalizer-bar"></div>
+                <div class="equalizer-bar"></div>
+              </div>` :
+              '▶'}
+          </div>
+        </button>
+      `).join('');
+
+      updateStationCards();
+    }
+
+    function playStation(url, name, genre) {
+      if (currentStation?.url === url && isPlaying) {
+        pauseStation();
+      } else {
+        audioPlayer.src = url;
+        audioPlayer.play();
+        currentStation = { url, name, genre };
+        isPlaying = true;
+        updateUI();
+      }
+    }
+
+    function pauseStation() {
+      audioPlayer.pause();
+      isPlaying = false;
+      updateUI();
+    }
+
+    function togglePlay() {
+      if (isPlaying) {
+        audioPlayer.pause();
+        isPlaying = false;
+      } else if (currentStation) {
+        audioPlayer.play();
+        isPlaying = true;
+      }
+      updateUI();
+    }
+
+    function toggleMute() {
+      isMuted = !isMuted;
+      audioPlayer.volume = isMuted ? 0 : currentVolume / 100;
+      updateVolumeUI();
+    }
+
+    function handleVolumeChange(value) {
+      currentVolume = parseInt(value);
+      audioPlayer.volume = isMuted ? 0 : currentVolume / 100;
+      if (currentVolume > 0 && isMuted) {
+        isMuted = false;
+      }
+      updateVolumeUI();
+    }
+
+    function updateVolumeUI() {
+      volumeSlider.value = isMuted ? 0 : currentVolume;
+      volumeValue.textContent = `${isMuted ? 0 : currentVolume}%`;
+      volumeToggle.textContent = isMuted ? '🔇' : '🔊';
+    }
+
+    function updateUI() {
+      if (currentStation && isPlaying) {
+        nowPlaying.classList.add('active');
+        stationName.textContent = currentStation.name;
+        stationGenre.textContent = currentStation.genre;
+        mainPlayButton.textContent = '⏸';
+      } else if (currentStation) {
+        mainPlayButton.textContent = '▶';
+      } else {
+        nowPlaying.classList.remove('active');
+      }
+      updateStationCards();
+    }
+
+    function updateStationCards() {
+      const cards = document.querySelectorAll('.station-card');
+      cards.forEach(card => {
+        const stationName = card.querySelector('h3').textContent;
+        const station = stations.find(s => s.name === stationName);
+        if (station?.url === currentStation?.url && isPlaying) {
+          card.classList.add('active');
+        } else {
+          card.classList.remove('active');
+        }
+      });
+    }
+
+    audioPlayer.volume = currentVolume / 100;
+    renderStations();
+  </script>
+</body>
+</html>

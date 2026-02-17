@@ -1,0 +1,442 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Kosztorys</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <style>
+    body {
+      font-family: Inter, system-ui, Segoe UI, Roboto, Arial;
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #f6f7fb;
+      padding: 12px;
+    }
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+      padding: 16px;
+      max-width: 520px;
+      width: 100%;
+    }
+    h1 {
+      font-size: 22px;
+      margin: 0 0 12px;
+      text-align: center;
+    }
+    .row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    label {
+      display: block;
+      font-size: 18px;
+      margin-bottom: 4px;
+    }
+    input[type=text],
+    input[type=number],
+    select {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 18px;
+    }
+    .qty-controls {
+      display: flex;
+      align-items: center;
+    }
+    .qty-controls button {
+      width: 32px;
+      height: 32px;
+      border: none;
+      background: #0ea5a6;
+      color: #fff;
+      font-size: 18px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .qty-controls input {
+      flex: 1;
+      text-align: center;
+    }
+    button.add,
+    button.export,
+    button.list-btn {
+      background: #0ea5a6;
+      color: white;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      width: 100%;
+      margin-top: 8px;
+      font-size: 18px;
+    }
+    .list {
+      margin-top: 16px;
+    }
+    .item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 0;
+      border-bottom: 1px solid #eee;
+      font-size: 18px;
+    }
+    .item span {
+      flex: 1;
+    }
+    .total {
+      margin-top: 12px;
+      font-weight: bold;
+      text-align: right;
+      font-size: 20px;
+      color: #0ea5a6;
+    }
+    .controls {
+      display: flex;
+      gap: 6px;
+    }
+    .export-table {
+      font-family: Arial, Helvetica, sans-serif;
+      border-collapse: collapse;
+      width: 100%;
+      background: white;
+    }
+    .export-table th,
+    .export-table td {
+      border: 1px solid #ccc;
+      padding: 6px;
+      text-align: left;
+    }
+    .export-table th {
+      background: #f3f4f6;
+    }
+    .export-wrapper {
+      padding: 12px;
+      background: white;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Kosztorys</h1>
+
+    <div>
+      <label for="listSelect">Lista</label>
+      <div class="row">
+        <select id="listSelect"></select>
+        <button class="list-btn" id="newList">Nowa lista</button>
+        <button class="list-btn" id="deleteList">Usuń listę</button>
+      </div>
+    </div>
+
+    <div>
+      <label for="article">Artykuł</label>
+      <input id="article" type="text" placeholder="Nazwa artykułu" />
+    </div>
+
+    <div class="row">
+      <div style="flex:1">
+        <label>Ilość</label>
+        <div class="qty-controls">
+          <button type="button" id="minus">-</button>
+          <input id="quantity" type="number" min="0" step="1" />
+          <button type="button" id="plus">+</button>
+        </div>
+      </div>
+      <div style="flex:1">
+        <label for="unitPrice">Cena/szt.</label>
+        <input id="unitPrice" type="number" min="0" step="0.01" placeholder="0.00" />
+      </div>
+    </div>
+
+    <button class="add" id="addItem">Dodaj pozycję</button>
+
+    <div class="list" id="itemList"></div>
+    <div class="total" id="total">Razem: 0,00 zł</div>
+
+    <div class="controls">
+      <button class="export" id="exportPDF">Eksport PDF</button>
+      <button class="export" id="exportJPEG">Eksport JPEG</button>
+    </div>
+  </div>
+
+  <script>
+    // DOM refs
+    const qty = document.getElementById('quantity');
+    const price = document.getElementById('unitPrice');
+    const article = document.getElementById('article');
+    const plusBtn = document.getElementById('plus');
+    const minusBtn = document.getElementById('minus');
+    const addItemBtn = document.getElementById('addItem');
+    const listEl = document.getElementById('itemList');
+    const totalEl = document.getElementById('total');
+    const listSelect = document.getElementById('listSelect');
+    const newListBtn = document.getElementById('newList');
+    const deleteListBtn = document.getElementById('deleteList');
+
+    // Data
+    let data = JSON.parse(localStorage.getItem('kosztorysData') || '{}');
+    let currentList = null;
+
+    function saveData() {
+      localStorage.setItem('kosztorysData', JSON.stringify(data));
+    }
+
+    function formatPLN(v) {
+      return new Intl.NumberFormat('pl-PL', {
+        style: 'currency',
+        currency: 'PLN',
+        maximumFractionDigits: 2
+      }).format(v);
+    }
+
+    function loadLists() {
+      listSelect.innerHTML = '';
+      if (Object.keys(data).length === 0) {
+        listSelect.innerHTML = '<option value="">Brak list</option>';
+        currentList = null;
+        listEl.innerHTML = '';
+        totalEl.textContent = 'Razem: 0,00 zł';
+        return;
+      }
+      Object.keys(data).forEach(name => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        listSelect.appendChild(opt);
+      });
+      if (!currentList) currentList = Object.keys(data)[0];
+      listSelect.value = currentList || '';
+      renderList();
+    }
+
+    plusBtn.onclick = () => {
+      qty.value = Number(qty.value || 0) + 1;
+    };
+
+    minusBtn.onclick = () => {
+      qty.value = Math.max(0, Number(qty.value || 0) - 1);
+    };
+
+    newListBtn.onclick = () => {
+      const name = prompt('Nazwa nowej listy:');
+      if (!name) return;
+      if (data[name]) {
+        alert('Lista o takiej nazwie już istnieje.');
+        return;
+      }
+      data[name] = [];
+      currentList = name;
+      saveData();
+      loadLists();
+    };
+
+    deleteListBtn.onclick = () => {
+      if (!currentList) {
+        alert('Wybierz listę do usunięcia.');
+        return;
+      }
+      if (confirm(`Czy na pewno chcesz usunąć listę "${currentList}"?`)) {
+        delete data[currentList];
+        currentList = Object.keys(data).length > 0 ? Object.keys(data)[0] : null;
+        saveData();
+        loadLists();
+      }
+    };
+
+    listSelect.onchange = () => {
+      currentList = listSelect.value;
+      renderList();
+    };
+
+    addItemBtn.onclick = () => {
+      if (!currentList) {
+        alert('Wybierz lub utwórz listę najpierw.');
+        return;
+      }
+      const q = Number(qty.value);
+      const p = Number(price.value);
+      const name = article.value.trim();
+      if (!name || !q || !p) {
+        alert('Wypełnij nazwę, ilość (>0) i cenę (>0).');
+        return;
+      }
+      data[currentList].push({ name, q, p, total: q * p });
+      saveData();
+      renderList();
+      article.value = '';
+      qty.value = '';
+      price.value = '';
+    };
+
+    function renderList() {
+      listEl.innerHTML = '';
+      if (!currentList || !data[currentList]) {
+        totalEl.textContent = 'Razem: 0,00 zł';
+        return;
+      }
+      let sum = 0;
+      data[currentList].forEach((item, idx) => {
+        sum += item.total;
+        const div = document.createElement('div');
+        div.className = 'item';
+        const left = document.createElement('span');
+        left.textContent = `${item.name} — ${item.q} × ${formatPLN(item.p)} = ${formatPLN(item.total)}`;
+        const controls = document.createElement('div');
+        controls.style.display = 'flex';
+        controls.style.gap = '6px';
+        const edit = document.createElement('button');
+        edit.textContent = '✏️';
+        edit.onclick = () => editItem(idx);
+        const del = document.createElement('button');
+        del.textContent = '🗑️';
+        del.onclick = () => deleteItem(idx);
+        controls.appendChild(edit);
+        controls.appendChild(del);
+        div.appendChild(left);
+        div.appendChild(controls);
+        listEl.appendChild(div);
+      });
+      totalEl.textContent = `Razem: ${formatPLN(sum)}`;
+    }
+
+    function editItem(i) {
+      const item = data[currentList][i];
+      const name = prompt('Nazwa artykułu:', item.name);
+      if (!name) return;
+      const q = Number(prompt('Ilość:', item.q));
+      if (!q) return;
+      const p = Number(prompt('Cena/szt.:', item.p));
+      if (!p) return;
+      data[currentList][i] = { name, q, p, total: q * p };
+      saveData();
+      renderList();
+    }
+
+    function deleteItem(i) {
+      if (confirm('Usunąć pozycję?')) {
+        data[currentList].splice(i, 1);
+        saveData();
+        renderList();
+      }
+    }
+
+    document.getElementById('exportPDF').onclick = async () => {
+      if (!currentList || !data[currentList]) {
+        alert('Brak listy do eksportu');
+        return;
+      }
+      const wrap = document.createElement('div');
+      wrap.className = 'export-wrapper';
+      wrap.style.width = '800px';
+      wrap.innerHTML = `<h2 style="text-align:center;margin:0 0 12px">${escapeHtml(currentList)}</h2>`;
+      const table = document.createElement('table');
+      table.className = 'export-table';
+      table.innerHTML = `<thead><tr><th>Artykuł</th><th>Ilość</th><th>Cena/szt.</th><th>Razem</th></tr></thead>`;
+      const tbody = document.createElement('tbody');
+      let sum = 0;
+      data[currentList].forEach(it => {
+        sum += it.total;
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${escapeHtml(it.name)}</td><td>${it.q}</td><td>${escapeHtml(formatPLN(it.p))}</td><td>${escapeHtml(formatPLN(it.total))}</td>`;
+        tbody.appendChild(tr);
+      });
+      const trSum = document.createElement('tr');
+      trSum.innerHTML = `<td colspan="3" style="text-align:right"><strong>Suma:</strong></td><td><strong>${escapeHtml(formatPLN(sum))}</strong></td>`;
+      tbody.appendChild(trSum);
+      table.appendChild(tbody);
+      wrap.appendChild(table);
+      wrap.style.position = 'fixed';
+      wrap.style.left = '-10000px';
+      wrap.style.top = '0';
+      document.body.appendChild(wrap);
+      const canvas = await html2canvas(wrap, { scale: 2, useCORS: true });
+      const imgData = canvas.toDataURL('image/png');
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const imgProps = pdf.getImageProperties(imgData);
+      const imgWidthPx = imgProps.width;
+      const imgHeightPx = imgProps.height;
+      const mmPerPx = pdf.internal.pageSize.getWidth() / imgWidthPx;
+      const imgWidthMm = imgWidthPx * mmPerPx;
+      const imgHeightMm = imgHeightPx * mmPerPx;
+      const margin = 10;
+      const printableWidth = pdf.internal.pageSize.getWidth() - margin * 2;
+      const scale = printableWidth / imgWidthPx;
+      const renderedHeight = imgHeightPx * scale;
+      const renderedHeightMm = renderedHeight * (pdf.internal.pageSize.getWidth() / imgWidthPx);
+      let drawWidth = printableWidth;
+      let drawHeight = (imgHeightPx * printableWidth) / imgWidthPx;
+      if (drawHeight > (pdf.internal.pageSize.getHeight() - margin * 2)) {
+        const printableHeight = pdf.internal.pageSize.getHeight() - margin * 2;
+        const scaleH = printableHeight / drawHeight;
+        drawWidth *= scaleH;
+        drawHeight *= scaleH;
+      }
+      pdf.addImage(imgData, 'PNG', margin, margin, drawWidth, drawHeight);
+      pdf.save(`${currentList}.pdf`);
+      wrap.remove();
+    };
+
+    document.getElementById('exportJPEG').onclick = async () => {
+      if (!currentList || !data[currentList]) {
+        alert('Brak listy do eksportu');
+        return;
+      }
+      const wrap = document.createElement('div');
+      wrap.className = 'export-wrapper';
+      wrap.style.width = '1200px';
+      wrap.innerHTML = `<h2 style="text-align:center;margin:0 0 12px">${escapeHtml(currentList)}</h2>`;
+      const table = document.createElement('table');
+      table.className = 'export-table';
+      table.innerHTML = `<thead><tr><th>Artykuł</th><th>Ilość</th><th>Cena/szt.</th><th>Razem</th></tr></thead>`;
+      const tbody = document.createElement('tbody');
+      let sum = 0;
+      data[currentList].forEach(it => {
+        sum += it.total;
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${escapeHtml(it.name)}</td><td>${it.q}</td><td>${escapeHtml(formatPLN(it.p))}</td><td>${escapeHtml(formatPLN(it.total))}</td>`;
+        tbody.appendChild(tr);
+      });
+      const trSum = document.createElement('tr');
+      trSum.innerHTML = `<td colspan="3" style="text-align:right"><strong>Suma:</strong></td><td><strong>${escapeHtml(formatPLN(sum))}</strong></td>`;
+      tbody.appendChild(trSum);
+      table.appendChild(tbody);
+      wrap.appendChild(table);
+      wrap.style.position = 'fixed';
+      wrap.style.left = '-10000px';
+      wrap.style.top = '0';
+      document.body.appendChild(wrap);
+      const canvas = await html2canvas(wrap, { scale: 2, useCORS: true });
+      const link = document.createElement('a');
+      link.href = canvas.toDataURL('image/jpeg', 0.92);
+      link.download = `${currentList}.jpeg`;
+      link.click();
+      wrap.remove();
+    };
+
+    function escapeHtml(text) {
+      if (typeof text !== 'string') return text;
+      return text.replace(/[&<>"']/g, function(ch) {
+        return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch];
+      });
+    }
+
+    // Initialize
+    loadLists();
+  </script>
+</body>
+</html>

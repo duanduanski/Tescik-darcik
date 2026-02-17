@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kalkulator Siły Docisku Śruby</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 10px;
+            padding: 10px;
+            max-width: 100%;
+            box-sizing: border-box;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        label {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        input, select {
+            padding: 8px;
+            font-size: 16px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        button {
+            padding: 10px;
+            font-size: 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #maxTorqueDisplay {
+            font-size: 16px;
+            color: #555;
+        }
+        #result {
+            margin-top: 20px;
+            font-size: 18px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Kalkulator Siły Docisku Śruby</h2>
+        
+        <div>
+            <label for="diameter">Średnica śruby (mm):</label>
+            <select id="diameter" onchange="updateMaxTorque()">
+                <option value="4">M4</option>
+                <option value="5">M5</option>
+                <option value="6">M6</option>
+                <option value="8">M8</option>
+                <option value="10">M10</option>
+                <option value="12">M12</option>
+                <option value="14">M14</option>
+                <option value="16">M16</option>
+                <option value="18">M18</option>
+                <option value="20">M20</option>
+                <option value="22">M22</option>
+                <option value="24">M24</option>
+                <option value="27">M27</option>
+                <option value="30">M30</option>
+            </select>
+        </div>
+
+        <div>
+            <label for="pitch">Skok gwintu (mm):</label>
+            <select id="pitch" onchange="updateMaxTorque()">
+                <option value="0.7">0.7 (M4)</option>
+                <option value="0.8">0.8 (M5)</option>
+                <option value="1.0">1.0 (M6)</option>
+                <option value="1.25">1.25 (M8)</option>
+                <option value="1.5">1.5 (M10)</option>
+                <option value="1.75">1.75 (M12)</option>
+                <option value="2.0">2.0 (M14-M16)</option>
+                <option value="2.5">2.5 (M18-M20)</option>
+                <option value="3.0">3.0 (M22-M24)</option>
+                <option value="3.5">3.5 (M27-M30)</option>
+            </select>
+        </div>
+
+        <div>
+            <label for="grade">Klasa śruby:</label>
+            <select id="grade" onchange="updateMaxTorque()">
+                <option value="4.8">4.8</option>
+                <option value="5.6">5.6</option>
+                <option value="8.8">8.8</option>
+                <option value="10.9">10.9</option>
+                <option value="12.9">12.9</option>
+            </select>
+        </div>
+
+        <div>
+            <label for="torque">Moment dokręcania (Nm):</label>
+            <input type="number" id="torque" step="0.1" min="0" placeholder="Wprowadź moment">
+        </div>
+
+        <div id="maxTorqueDisplay"></div>
+
+        <button onclick="calculate()">Oblicz</button>
+
+        <div id="result"></div>
+    </div>
+
+    <script>
+        // Przybliżone maksymalne momenty dokręcania (Nm) wg norm dla śrub (bez smarowania)
+        const maxTorqueTable = {
+            '4': { '4.8': 1.5, '5.6': 1.8, '8.8': 3.6, '10.9': 5.1, '12.9': 6.1 },
+            '5': { '4.8': 2.9, '5.6': 3.6, '8.8': 7.2, '10.9': 10, '12.9': 12 },
+            '6': { '4.8': 5.0, '5.6': 6.2, '8.8': 12, '10.9': 17, '12.9': 20 },
+            '8': { '4.8': 12, '5.6': 15, '8.8': 30, '10.9': 42, '12.9': 50 },
+            '10': { '4.8': 24, '5.6': 30, '8.8': 59, '10.9': 83, '12.9': 100 },
+            '12': { '4.8': 41, '5.6': 51, '8.8': 102, '10.9': 143, '12.9': 172 },
+            '14': { '4.8': 65, '5.6': 81, '8.8': 162, '10.9': 227, '12.9': 273 },
+            '16': { '4.8': 100, '5.6': 125, '8.8': 250, '10.9': 350, '12.9': 420 },
+            '18': { '4.8': 138, '5.6': 172, '8.8': 344, '10.9': 482, '12.9': 578 },
+            '20': { '4.8': 195, '5.6': 243, '8.8': 486, '10.9': 680, '12.9': 816 },
+            '22': { '4.8': 263, '5.6': 329, '8.8': 658, '10.9': 921, '12.9': 1105 },
+            '24': { '4.8': 336, '5.6': 420, '8.8': 840, '10.9': 1176, '12.9': 1411 },
+            '27': { '4.8': 492, '5.6': 615, '8.8': 1230, '10.9': 1722, '12.9': 2066 },
+            '30': { '4.8': 672, '5.6': 840, '8.8': 1680, '10.9': 2352, '12.9': 2822 }
+        };
+
+        function updateMaxTorque() {
+            const diameter = document.getElementById('diameter').value;
+            const grade = document.getElementById('grade').value;
+
+            const maxTorque = maxTorqueTable[diameter][grade];
+            document.getElementById('maxTorqueDisplay').innerHTML = 
+                `Maksymalny moment dla M${diameter} (klasa ${grade}): ${maxTorque} Nm`;
+        }
+
+        function calculate() {
+            const diameter = parseFloat(document.getElementById('diameter').value);
+            const torque = parseFloat(document.getElementById('torque').value);
+            const grade = document.getElementById('grade').value;
+
+            if (!torque || torque <= 0) {
+                document.getElementById('result').innerHTML = "Proszę podać prawidłowy moment dokręcania!";
+                return;
+            }
+
+            // Stały współczynnik K (dla smarowanych śrub)
+            const K = 0.13;
+
+            // Obliczenie siły docisku w kN
+            const clampForceKN = torque / (K * diameter); // kN
+
+            // Konwersja na kgf (1 kN ≈ 101.97 kgf)
+            const clampForceKgf = clampForceKN * 101.97;
+
+            // Sprawdzenie, czy moment nie przekracza maksymalnego
+            const maxTorque = maxTorqueTable[diameter][grade];
+            const warning = torque > maxTorque ? "<br><b>Uwaga:</b> Podany moment przekracza maksymalny!" : "";
+
+            // Wynik
+            document.getElementById('result').innerHTML = 
+                `Siła docisku: ${clampForceKgf.toFixed(2)} kgf${warning}`;
+        }
+
+        // Wywołanie przy załadowaniu strony
+        window.onload = updateMaxTorque;
+    </script>
+</body>
+</html>

@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kalkulator objętości</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+            user-select: none; /* Blokuje zaznaczanie tekstu */
+        }
+        .section {
+            margin-bottom: 20px;
+        }
+        input {
+            margin: 12px;
+            padding: 5px;
+        }
+        button {
+            padding: 10px;
+            margin: 5px;
+            cursor: pointer;
+        }
+        .calculate-btn {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+        }
+        .calculate-btn:hover {
+            background-color: #45a049;
+        }
+        .clear-btn {
+            background-color: #f44336;
+            color: white;
+            border: none;
+        }
+        .clear-btn:hover {
+            background-color: #da190b;
+        }
+        .result {
+            margin-top: 10px;
+            font-weight: bold;
+        }
+        select {
+            margin: 5px;
+            padding: 5px;
+        }
+    </style>
+</head>
+<body oncontextmenu="return false;">
+    <h1>Kalkulator objętości</h1>
+
+    <div class="section">
+        <h2>Objętość walca</h2>
+        <label>Średnica podstawy (cm): </label>
+        <input type="number" id="cylinderDiameter" min="0" step="any"><br>
+        <label>Wysokość (cm): </label>
+        <input type="number" id="cylinderHeight" min="0" step="any"><br>
+        <label>Jednostka: </label>
+        <select id="cylinderUnit">
+            <option value="liters">Litry</option>
+            <option value="cm3">cm³</option>
+            <option value="m3">m³</option>
+        </select><br>
+        <button class="calculate-btn" onclick="calculateCylinder()">Oblicz</button>
+        <button class="clear-btn" onclick="clearCylinder()">Wyczyść</button>
+        <div id="cylinderResult" class="result"></div>
+    </div>
+
+    <div class="section">
+        <h2>Objętość prostopadłościanu</h2>
+        <label>Długość (cm): 
+</label>
+        <input type="number" id="boxLength" min="0" step="any"><br>
+        <label>Szerokość (cm): </label>
+        <input type="number" id="boxWidth" min="0" step="any"><br>
+        <label>Wysokość (cm): </label>
+        <input type="number" id="boxHeight" min="0" step="any"><br>
+        <label>Jednostka: </label>
+        <select id="boxUnit">
+            <option value="liters">Litry</option>
+            <option value="cm3">cm³</option>
+            <option value="m3">m³</option>
+        </select><br>
+        <button class="calculate-btn" onclick="calculateBox()">Oblicz</button>
+        <button class="clear-btn" onclick="clearBox()">Wyczyść</button>
+        <div id="boxResult" class="result"></div>
+    </div>
+
+    <div class="section">
+        <h2>Objętość kuli</h2>
+        <label>Promień (cm): </label>
+        <input type="number" id="sphereRadius" min="0" step="any"><br>
+        <label>Jednostka: </label>
+        <select id="sphereUnit">
+            <option value="liters">Litry</option>
+            <option value="cm3">cm³</option>
+            <option value="m3">m³</option>
+        </select><br>
+        <button class="calculate-btn" onclick="calculateSphere()">Oblicz</button>
+        <button class="clear-btn" onclick="clearSphere()">Wyczyść</button>
+        <div id="sphereResult" class="result"></div>
+    </div>
+
+    <script>
+        // Blokada odświeżania strony (F5, Ctrl+R)
+        window.onkeydown = function(event) {
+            if ((event.key === 'F5') || (event.ctrlKey && event.key === 'r')) {
+                event.preventDefault();
+            }
+        };
+
+        function convertVolume(volumeCm3, unit) {
+            switch (unit) {
+                case 'liters':
+                    return (volumeCm3 / 1000).toFixed(2) + ' litrów';
+                case 'cm3':
+                    return volumeCm3.toFixed(2) + ' cm³';
+                case 'm3':
+                    return (volumeCm3 / 1000000).toFixed(2) + ' m³';
+                default:
+                    return 'Nieznana jednostka';
+            }
+        }
+
+        function calculateCylinder() {
+            const diameter = parseFloat(document.getElementById('cylinderDiameter').value);
+            const height = parseFloat(document.getElementById('cylinderHeight').value);
+            const unit = document.getElementById('cylinderUnit').value;
+
+            if (isNaN(diameter) || isNaN(height) || diameter <= 0 || height <= 0) {
+                document.getElementById('cylinderResult').innerText = 
+                    'Proszę wprowadzić prawidłowe wartości dodatnie';
+                return;
+            }
+
+            // V = π * (d/2)² * h
+            const radius = diameter / 2;
+            const volumeCm3 = Math.PI * radius * radius * height;
+            document.getElementById('cylinderResult').innerText = 
+                `Objętość walca: ${convertVolume(volumeCm3, unit)}`;
+        }
+
+        function clearCylinder() {
+            document.getElementById('cylinderDiameter').value = '';
+            document.getElementById('cylinderHeight').value = '';
+            document.getElementById('cylinderUnit').value = 'liters';
+            document.getElementById('cylinderResult').innerText = '';
+        }
+
+        function calculateBox() {
+            const length = parseFloat(document.getElementById('boxLength').value);
+            const width = parseFloat(document.getElementById('boxWidth').value);
+            const height = parseFloat(document.getElementById('boxHeight').value);
+            const unit = document.getElementById('boxUnit').value;
+
+            if (isNaN(length) || isNaN(width) || isNaN(height) || 
+                length <= 0 || width <= 0 || height <= 0) {
+                document.getElementById('boxResult').innerText = 
+                    'Proszę wprowadzić prawidłowe wartości dodatnie';
+                return;
+            }
+
+            // V = a * b * h
+            const volumeCm3 = length * width * height;
+            document.getElementById('boxResult').innerText = 
+                `Objętość prostopadłościanu: ${convertVolume(volumeCm3, unit)}`;
+        }
+
+        function clearBox() {
+            document.getElementById('boxLength').value = '';
+            document.getElementById('boxWidth').value = '';
+            document.getElementById('boxHeight').value = '';
+            document.getElementById('boxUnit').value = 'liters';
+            document.getElementById('boxResult').innerText = '';
+        }
+
+        function calculateSphere() {
+            const radius = parseFloat(document.getElementById('sphereRadius').value);
+            const unit = document.getElementById('sphereUnit').value;
+
+            if (isNaN(radius) || radius <= 0) {
+                document.getElementById('sphereResult').innerText = 
+                    'Proszę wprowadzić prawidłową wartość dodatnią';
+                return;
+            }
+
+            // V = (4/3) * π * r³
+            const volumeCm3 = (4/3) * Math.PI * radius * radius * radius;
+            document.getElementById('sphereResult').innerText = 
+                `Objętość kuli: ${convertVolume(volumeCm3, unit)}`;
+        }
+
+        function clearSphere() {
+            document.getElementById('sphereRadius').value = '';
+            document.getElementById('sphereUnit').value = 'liters';
+            document.getElementById('sphereResult').innerText = '';
+        }
+    </script>
+</body>
+</html>

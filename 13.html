@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Mobilny Licznik Wydatków</title>
+    <style>
+        :root {
+            --primary: #007bff;
+            --danger: #dc3545;
+            --bg: #f8f9fa;
+        }
+        body { font-family: -apple-system, system-ui, sans-serif; background-color: var(--bg); margin: 0; padding: 15px; display: flex; justify-content: center; }
+        .card { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); width: 100%; max-width: 450px; }
+        h2 { text-align: center; margin-top: 0; color: #2d3436; }
+        
+        .balance-box { background: #fff; border: 2px solid #eee; border-radius: 12px; padding: 15px; text-align: center; margin-bottom: 20px; }
+        .balance-amount { font-size: 1.8rem; font-weight: bold; margin-top: 5px; }
+        
+        .input-group { margin-bottom: 12px; }
+        label { display: block; margin-bottom: 5px; font-size: 0.9rem; color: #636e72; }
+        input { width: 100%; padding: 12px; border: 1px solid #dfe6e9; border-radius: 8px; box-sizing: border-box; font-size: 16px; /* Zapobiega zoomowaniu na iOS */ }
+        
+        .btn-add { width: 100%; padding: 14px; background-color: var(--primary); color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 1rem; font-weight: bold; margin-top: 10px; }
+        
+        ul { list-style: none; padding: 0; margin-top: 25px; }
+        li { background: white; padding: 12px; border: 1px solid #f1f1f1; border-radius: 10px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+        
+        .expense-info { display: flex; flex-direction: column; }
+        .expense-name { font-weight: 600; }
+        .expense-val { color: var(--danger); font-size: 0.9rem; }
+        
+        .btn-delete { background: #ffeaa7; color: #d63031; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; }
+        
+        .positive { color: #27ae60; }
+        .negative { color: #d63031; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2>Portfel</h2>
+    
+    <div class="input-group">
+        <label>Budżet początkowy:</label>
+        <input type="number" id="initialAmount" placeholder="0.00" oninput="saveAndRefresh()">
+    </div>
+
+    <div class="balance-box">
+        <div style="font-size: 0.9rem; color: #636e72;">Dostępne środki:</div>
+        <div id="balanceDisplay" class="balance-amount">0.00 PLN</div>
+    </div>
+
+    <div style="border-top: 1px solid #eee; padding-top: 20px;">
+        <div class="input-group">
+            <input type="text" id="expenseName" placeholder="Nazwa (np. Obiad)">
+        </div>
+        <div class="input-group">
+            <input type="number" id="expenseValue" placeholder="Kwota">
+        </div>
+        <button class="btn-add" onclick="addExpense()">Dodaj wydatek</button>
+    </div>
+
+    <ul id="expenseList"></ul>
+</div>
+
+<script>
+    let state = {
+        initial: 0,
+        expenses: []
+    };
+
+    // Wczytaj dane przy starcie
+    window.onload = function() {
+        const savedData = localStorage.getItem('budgetAppData');
+        if (savedData) {
+            state = JSON.parse(savedData);
+            document.getElementById('initialAmount').value = state.initial || "";
+            renderList();
+            updateBalanceDisplay();
+        }
+    };
+
+    function saveAndRefresh() {
+        state.initial = parseFloat(document.getElementById('initialAmount').value) || 0;
+        saveToLocalStorage();
+        updateBalanceDisplay();
+    }
+
+    function addExpense() {
+        const nameInput = document.getElementById('expenseName');
+        const valueInput = document.getElementById('expenseValue');
+        
+        const name = nameInput.value;
+        const amount = parseFloat(valueInput.value);
+
+        if (name && !isNaN(amount)) {
+            const newExpense = {
+                id: Date.now(),
+                name: name,
+                amount: amount
+            };
+
+            state.expenses.push(newExpense);
+            saveToLocalStorage();
+            
+            nameInput.value = '';
+            valueInput.value = '';
+            
+            renderList();
+            updateBalanceDisplay();
+        }
+    }
+
+    function deleteExpense(id) {
+        state.expenses = state.expenses.filter(exp => exp.id !== id);
+        saveToLocalStorage();
+        renderList();
+        updateBalanceDisplay();
+    }
+
+    function updateBalanceDisplay() {
+        const totalExpenses = state.expenses.reduce((sum, exp) => sum + exp.amount, 0);
+        const currentBalance = state.initial - totalExpenses;
+
+        const display = document.getElementById('balanceDisplay');
+        display.innerText = `${currentBalance.toFixed(2)} PLN`;
+        display.className = currentBalance < 0 ? 'balance-amount negative' : 'balance-amount positive';
+    }
+
+    function renderList() {
+        const listElement = document.getElementById('expenseList');
+        listElement.innerHTML = '';
+
+        state.expenses.forEach(exp => {
+            const li = document.createElement('li');
+            li.innerHTML = `
+                <div class="expense-info">
+                    <span class="expense-name">${exp.name}</span>
+                    <span class="expense-val">-${exp.amount.toFixed(2)} PLN</span>
+                </div>
+                <button class="btn-delete" onclick="deleteExpense(${exp.id})">Usuń</button>
+            `;
+            listElement.appendChild(li);
+        });
+    }
+
+    function saveToLocalStorage() {
+        localStorage.setItem('budgetAppData', JSON.stringify(state));
+    }
+</script>
+
+</body>
+</html>

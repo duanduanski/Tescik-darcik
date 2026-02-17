@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generator G-code - Sześciokąt</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f0f0f0;
+            max-width: 100%;
+            overflow-x: hidden;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        input, select, button {
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            box-sizing: border-box;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        #clearBtn {
+            background: #dc3545;
+        }
+        #clearBtn:hover {
+            background: #b02a37;
+        }
+        #previewCanvas {
+            width: 100%;
+            max-width: 400px;
+            height: 400px;
+            margin: 20px auto;
+            display: block;
+            border: 1px solid #ddd;
+        }
+        textarea {
+            width: 100%;
+            height: 200px;
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        label {
+            font-weight: bold;
+            margin-top: 10px;
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Generator G-code - Sześciokąt</h2>
+        
+        <label>Szerokość sześciokąta (mm):</label>
+        <input type="number" id="diameter" min="1" step="0.1" value="10">
+
+        <label>Średnica narzędzia (mm):</label>
+        <input type="number" id="toolDiameter" min="1" step="0.1" value="10">
+
+        <label>Głębokość końcowa (mm, wartość ujemna):</label>
+        <input type="number" id="finalDepth" max="0" step="0.1" value="-10">
+
+        <label>Wielkość warstwy (mm):</label>
+        <input type="number" id="layerDepth" min="0.1" step="0.1" value="2">
+
+        <label>Posuw frezowania (mm/min):</label>
+        <input type="number" id="feedRate" min="1" value="500">
+
+        <label>Posuw zagłębiania (mm/min):</label>
+        <input type="number" id="plungeRate" min="1" value="200">
+
+        <label>Obroty wrzeciona (obr/min):</label>
+        <input type="number" id="spindleSpeed" min="1" value="1200">
+
+        <label>Odległość dojazdu/odjazdu (mm):</label>
+        <input type="number" id="approach" min="0" step="0.1" value="10">
+
+        <label>Kierunek frezowania:</label>
+        <select id="direction">
+            <option value="cw">Współbieżne (CW)</option>
+            <option value="ccw">Przeciwbieżne (CCW)</option>
+        </select>
+
+        <label>System sterowania:</label>
+        <select id="controlSystem">
+            <option value="fanuc">Fanuc</option>
+            <option value="heidenhain">Heidenhain</option>
+        </select>
+
+        <button onclick="generateGCode()">Generuj G-code</button>
+        <button id="clearBtn" onclick="clearForm()">Wyczyść</button>
+        
+        <canvas id="previewCanvas" width="400" height="400"></canvas>
+        
+        <textarea id="gcodeOutput" readonly></textarea>
+        
+        <button onclick="downloadGCode()">Pobierz G-code</button>
+    </div>
+
+<script>
+    function generateGCode() {
+        const width = parseFloat(document.getElementById('diameter').value);
+        const toolDia = parseFloat(document.getElementById('toolDiameter').value);
+        const finalDepth = parseFloat(document.getElementById('finalDepth').value);
+        const layerDepth = parseFloat(document.getElementById('layerDepth').value);
+        const feedRate = parseInt(document.getElementById('feedRate').value);
+        const plungeRate = parseInt(document.getElementById('plungeRate').value);
+        const spindleSpeed = parseInt(document.getElementById('spindleSpeed').value);
+        const approach = parseFloat(document.getElementById('approach').value);
+        const direction = document.getElementById('direction').value;
+        const controlSystem = document.getElementById('controlSystem').value;
+
+        // Geometria
+        const effectiveInscribedDiameter = width + toolDia;
+        const inscribedRadius = effectiveInscribedDiameter / 2;
+        const radius = inscribedRadius / Math.cos(30 * Math.PI / 180); 
+        const startX = radius + approach; 
+
+        // Wierzchołki (P1, P2, ..., P6) w kolejności przeciwbieżnej (CCW)
+        const points = [
+            {x: parseFloat(radius.toFixed(2)), y: 0},
+            {x: parseFloat((radius * Math.cos(60 * Math.PI / 180)).toFixed(2)), y: parseFloat((radius * Math.sin(60 * Math.PI / 180)).toFixed(2))},
+            {x: parseFloat((-radius * Math.cos(60 * Math.PI / 180)).toFixed(2)), y: parseFloat((radius * Math.sin(60 * Math.PI / 180)).toFixed(2))},
+            {x: parseFloat((-radius).toFixed(2)), y: 0},
+            {x: parseFloat((-radius * Math.cos(60 * Math.PI / 180)).toFixed(2)), y: parseFloat((-radius * Math.sin(60 * Math.PI / 180)).toFixed(2))},
+            {x: parseFloat((radius * Math.cos(60 * Math.PI / 180)).toFixed(2)), y: parseFloat((-radius * Math.sin(60 * Math.PI / 180)).toFixed(2))}
+        ];
+
+        let gcode = [];
+
+        if (controlSystem === 'fanuc') {
+            gcode.push(
+                "G21",
+                "G90",
+                "T1 M6",
+                `M3 S${spindleSpeed}`,
+                `G0 X${startX.toFixed(2)} Y0.0`,
+                "G43 H1 Z10.0"
+            );
+
+            const numLayers = Math.ceil(Math.abs(finalDepth) / layerDepth);
+            for (let layer = 1; layer <= numLayers; layer++) {
+                const currentDepth = -Math.min(layer * layerDepth, Math.abs(finalDepth));
+                
+                // 1. Osiągnięcie głębokości i ruch do punktu dojazdowego (startX) na głębokości
+                gcode.push(
+                    `G1 Z${currentDepth.toFixed(2)} F${plungeRate}`,
+                    `G1 X${startX.toFixed(2)} Y0.0 F${feedRate}`
+                );
+
+                if (direction === 'cw') {
+                    // FREZOWANIE WSPÓŁBIEŻNE (CW path: P1 -> P6 -> ... -> P2 -> P1)
+                    
+                    // 2. Ruch z punktu dojazdowego (startX) do P1 (points[0]) - START ścieżki frezowania
+                    gcode.push(`G1 X${points[0].x.toFixed(2)} Y${points[0].y.toFixed(2)} F${feedRate}`); 
+
+                    // 3. Frezowanie P1 do P6, P5, P4, P3, P2 (indeksy 5 w dół do 1)
+                    for (let i = points.length - 1; i >= 1; i--) { 
+                        gcode.push(`G1 X${points[i].x.toFixed(2)} Y${points[i].y.toFixed(2)} F${feedRate}`);
+                    }
+                    
+                    // 4. Zamknięcie pętli P2 do P1 (indeks 1 do 0) - KONIEC ścieżki frezowania
+                    gcode.push(`G1 X${points[0].x.toFixed(2)} Y${points[0].y.toFixed(2)} F${feedRate}`);
+
+                } else { 
+                    // FREZOWANIE PRZECIWBEŻNE (CCW path: P1 -> P2 -> ... -> P6 -> P1)
+                    
+                    // 2. Ruch z punktu dojazdowego (startX) do P1 (points[0]) - START ścieżki frezowania
+                    gcode.push(`G1 X${points[0].x.toFixed(2)} Y${points[0].y.toFixed(2)} F${feedRate}`);
+
+                    // 3. Frezowanie P1 do P2, P3, P4, P5, P6 (indeksy 1 do 5)
+                    for (let i = 1; i < points.length; i++) { 
+                        gcode.push(`G1 X${points[i].x.toFixed(2)} Y${points[i].y.toFixed(2)} F${feedRate}`);
+                    }
+
+                    // 4. Zamknięcie pętli P6 do P1 (indeks 5 do 0) - KONIEC ścieżki frezowania
+                    gcode.push(`G1 X${points[0].x.toFixed(2)} Y${points[0].y.toFixed(2)} F${feedRate}`);
+                }
+                
+                // 5. Powrót do punktu dojazdowego (startX) na głębokości
+                gcode.push(`G1 X${startX.toFixed(2)} Y0.0 F${feedRate}`);
+            }
+
+            gcode.push(
+                "G0 Z10.0",
+                "M5",
+                "M30"
+            );
+        } else { // Heidenhain
+            gcode.push(
+                "BEGIN PGM HEXAGON MM",
+                "BLK FORM 0.1 Z X-50 Y-50 Z-50",
+                "BLK FORM 0.2 X50 Y50 Z0",
+                `TOOL CALL 1 Z S${spindleSpeed}`,
+                `L X${startX.toFixed(2)} Y0.0 FMAX M3`,
+                "L Z+10 FMAX"
+            );
+
+            const numLayers = Math.ceil(Math.abs(finalDepth) / layerDepth);
+            for (let layer = 1; layer <= numLayers; layer++) {
+                const currentDepth = -Math.min(layer * layerDepth, Math.abs(finalDepth));
+                
+                // 1. Osiągnięcie głębokości i ruch do punktu dojazdowego (startX) na głębokości
+                gcode.push(
+                    `L Z${currentDepth.toFixed(2)} F${plungeRate}`,
+                    `L X${startX.toFixed(2)} Y0.0 F${feedRate}`
+                );
+                
+                if (direction === 'cw') {
+                    // FREZOWANIE WSPÓŁBIEŻNE (CW path: P1 -> P6 -> ... -> P2 -> P1)
+                    
+                    // 2. Ruch z punktu dojazdowego (startX) do P1 (points[0]) - START ścieżki frezowania
+                    gcode.push(`L X${points[0].x.toFixed(2)} Y${points[0].y.toFixed(2)} F${feedRate}`); 
+
+                    // 3. Frezowanie P1 do P6, P5, P4, P3, P2 (indeksy 5 w dół do 1)
+                    for (let i = points.length - 1; i >= 1; i--) { 
+                        gcode.push(`L X${points[i].x.toFixed(2)} Y${points[i].y.toFixed(2)} F${feedRate}`);
+                    }
+                    
+                    // 4. Zamknięcie pętli P2 do P1 (indeks 1 do 0) - KONIEC ścieżki frezowania
+                    gcode.push(`L X${points[0].x.toFixed(2)} Y${points[0].y.toFixed(2)} F${feedRate}`);
+
+                } else { 
+                    // FREZOWANIE PRZECIWBEŻNE (CCW path: P1 -> P2 -> ... -> P6 -> P1)
+                    
+                    // 2. Ruch z punktu dojazdowego (startX) do P1 (points[0]) - START ścieżki frezowania
+                    gcode.push(`L X${points[0].x.toFixed(2)} Y${points[0].y.toFixed(2)} F${feedRate}`);
+
+                    // 3. Frezowanie P1 do P2, P3, P4, P5, P6 (indeksy 1 do 5)
+                    for (let i = 1; i < points.length; i++) { 
+                        gcode.push(`L X${points[i].x.toFixed(2)} Y${points[i].y.toFixed(2)} F${feedRate}`);
+                    }
+
+                    // 4. Zamknięcie pętli P6 do P1 (indeks 5 do 0) - KONIEC ścieżki frezowania
+                    gcode.push(`L X${points[0].x.toFixed(2)} Y${points[0].y.toFixed(2)} F${feedRate}`);
+                }
+                
+                // 5. Powrót do punktu dojazdowego (startX) na głębokości
+                gcode.push(`L X${startX.toFixed(2)} Y0.0 F${feedRate}`);
+            }
+
+            gcode.push(
+                "L Z+10 FMAX",
+                "M5",
+                "END PGM HEXAGON MM"
+            );
+        }
+
+        document.getElementById('gcodeOutput').value = gcode.join('\n');
+        drawCanvasPreview(points, startX, radius);
+    }
+
+    function drawCanvasPreview(points, startX, radius) {
+        const canvas = document.getElementById('previewCanvas');
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Oblicz granice ścieżki
+        const allX = [startX, radius, ...points.map(p => p.x)];
+        const allY = [0, ...points.map(p => p.y)];
+        const minX = Math.min(...allX);
+        const maxX = Math.max(...allX);
+        const minY = Math.min(...allY);
+        const maxY = Math.max(...allY);
+
+        // Rozmiar ścieżki w jednostkach rzeczywistych
+        const width = maxX - minX;
+        const height = maxY - minY;
+        const maxDimension = Math.max(width, height);
+
+        // Margines (10% canvas)
+        const margin = 0.1;
+        const canvasSize = Math.min(canvas.width, canvas.height) * (1 - margin * 2);
+
+        // Skala: dopasowanie do canvas z marginesem
+        const scale = canvasSize / maxDimension;
+
+        // Przesunięcie, aby wyśrodkować
+        const offsetX = canvas.width / 2 - (minX + maxX) / 2 * scale;
+        const offsetY = canvas.height / 2 + (minY + maxY) / 2 * scale; // Y w dół w canvas
+
+        // Rysowanie osi
+        ctx.beginPath();
+        ctx.strokeStyle = '#cccccc';
+        ctx.moveTo(0, canvas.height / 2);
+        ctx.lineTo(canvas.width, canvas.height / 2);
+        ctx.moveTo(canvas.width / 2, 0);
+        ctx.lineTo(canvas.width / 2, canvas.height);
+        ctx.stroke();
+
+        // Rysowanie ścieżki dojazdu (zielona linia)
+        ctx.beginPath();
+        ctx.strokeStyle = '#00ff00';
+        ctx.moveTo(canvas.width / 2, canvas.height / 2); // Początek w (0, 0)
+        ctx.lineTo(offsetX + startX * scale, offsetY); // Punkt startowy
+        ctx.stroke();
+
+        // Rysowanie sześciokąta (niebieska linia)
+        ctx.beginPath();
+        ctx.strokeStyle = '#0000ff';
+        ctx.moveTo(offsetX + startX * scale, offsetY);
+        ctx.lineTo(offsetX + radius * scale, offsetY);
+        points.forEach(p => {
+            ctx.lineTo(offsetX + p.x * scale, offsetY - p.y * scale); // Y negatywne, bo canvas ma Y w dół
+        });
+        ctx.lineTo(offsetX + radius * scale, offsetY);
+        ctx.lineTo(offsetX + startX * scale, offsetY);
+        ctx.stroke();
+
+        // Punkt startowy (czerwony)
+        ctx.beginPath();
+        ctx.fillStyle = '#ff0000';
+        ctx.arc(offsetX + startX * scale, offsetY, 3, 0, 2 * Math.PI);
+        ctx.fill();
+    }
+
+    function downloadGCode() {
+        const gcode = document.getElementById('gcodeOutput').value;
+        const controlSystem = document.getElementById('controlSystem').value;
+        const extension = controlSystem === 'fanuc' ? '.nc' : '.h';
+        const blob = new Blob([gcode], {type: 'text/plain'});
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `hexagon${extension}`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+    }
+
+    function clearForm() {
+        document.getElementById('diameter').value = "10";
+        document.getElementById('toolDiameter').value = "10";
+        document.getElementById('finalDepth').value = "-10";
+        document.getElementById('layerDepth').value = "2";
+        document.getElementById('feedRate').value = "500";
+        document.getElementById('plungeRate').value = "200";
+        document.getElementById('spindleSpeed').value = "1200";
+        document.getElementById('approach').value = "10";
+        document.getElementById('direction').value = "cw";
+        document.getElementById('controlSystem').value = "fanuc";
+        document.getElementById('gcodeOutput').value = "";
+        const canvas = document.getElementById('previewCanvas');
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+</script>
+</body>
+</html>

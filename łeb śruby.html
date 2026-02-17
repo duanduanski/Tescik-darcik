@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Obliczanie wierzchołków sześciokąta</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            text-align: center; 
+            background-color: #f0f8ff;
+            color: #333;
+            padding: 20px;
+        }
+        input, button { 
+            margin: 10px; 
+            padding: 10px; 
+            font-size: 20px; 
+            border-radius: 5px;
+            border: 1px solid #007BFF;
+        }
+        button {
+            background-color: #007BFF;
+            color: white;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        canvas { 
+            border: 2px solid #007BFF; 
+            margin-top: 20px; 
+            background-color: white;
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        #result {
+            white-space: pre-line;
+            font-size: 20px;
+            font-weight: bold;
+            background-color: #e9f5ff;
+            padding: 10px;
+            border-radius: 5px;
+            width: fit-content;
+            margin: auto;
+        }
+        label {
+            font-size: 20px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h2>Oblicz współrzędne wierzchołków sześciokąta foremnego</h2>
+    <label for="diagonal">Podaj rozmiar klucza:</label>
+    <input type="number" id="diagonal" step="any">
+    <button onclick="calculateHexagon()">Oblicz</button>
+    <button onclick="clearCanvas()">Wyczyść</button>
+    <p id="result"></p>
+    <canvas id="hexCanvas" width="300" height="300"></canvas>
+
+    <script>
+        function calculateHexagon() {
+            const d = parseFloat(document.getElementById('diagonal').value);
+            if (isNaN(d) || d <= 0) {
+                alert("Podaj poprawną wartość rozmiaru klucza.");
+                return;
+            }
+            
+            const r = d / Math.sqrt(3); // Promień okręgu opisanego
+            const points = [];
+            let resultText = "Współrzędne wierzchołków:\n";
+            
+            for (let i = 0; i < 6; i++) {
+                const angle = (Math.PI / 3) * i;
+                const x = r * Math.cos(angle);
+                const y = r * Math.sin(angle);
+                points.push([x, y]);
+                resultText += `${i + 1}: X=${x.toFixed(2)}, Y=${y.toFixed(2)}\n`;
+            }
+            
+            document.getElementById('result').innerText = resultText;
+            drawHexagon(points, r);
+        }
+
+        function drawHexagon(points, r) {
+            const canvas = document.getElementById('hexCanvas');
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.strokeStyle = '#007BFF';
+            ctx.fillStyle = 'red';
+            ctx.lineWidth = 2;
+
+            const scale = 100 / r; // Dopasowanie do rozmiaru canvas
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            
+            ctx.beginPath();
+            points.forEach(([x, y], index) => {
+                const canvasX = centerX + x * scale;
+                const canvasY = centerY - y * scale;
+                if (index === 0) {
+                    ctx.moveTo(canvasX, canvasY);
+                } else {
+                    ctx.lineTo(canvasX, canvasY);
+                }
+            });
+            ctx.closePath();
+            ctx.stroke();
+            
+            points.forEach(([x, y], index) => {
+                const canvasX = centerX + x * scale;
+                const canvasY = centerY - y * scale;
+                
+                // Rysowanie punktów
+                ctx.beginPath();
+                ctx.arc(canvasX, canvasY, 5, 0, 2 * Math.PI);
+                ctx.fill();
+                ctx.stroke();
+                
+                // Numeracja punktów
+                ctx.fillStyle = 'black';
+                ctx.font = '14px Arial';
+                ctx.fillText(index + 1, canvasX + 5, canvasY - 5);
+                ctx.fillStyle = 'red';
+            });
+        }
+
+        function clearCanvas() {
+            const canvas = document.getElementById('hexCanvas');
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            document.getElementById('result').innerText = "";
+        }
+    </script>
+</body>
+</html>
