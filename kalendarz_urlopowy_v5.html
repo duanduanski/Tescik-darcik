@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kalendarz Urlopowy v2.3</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+        
+        body { 
+            font-family: 'Inter', sans-serif; 
+            color: #000000 !important;
+            margin: 0;
+        }
+
+        /* Globalne wymuszenie czerni dla tekstów (poza wyjątkami) */
+        * { border-color: #000000; }
+        body, p, span, div:not(.nav-label) { color: #000000; }
+
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: 12% repeat(7, 1fr);
+            width: 100%;
+        }
+
+        .calendar-cell {
+            aspect-ratio: 1/1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border-bottom: 0.5px solid #e2e8f0;
+            border-right: 0.75px solid #e2e8f0;
+        }
+
+        .week-num {
+            background-color: #f8fafc;
+            font-size: 1rem;
+            font-weight: 900;
+            border-right: 2px solid #000000;
+        }
+
+        /* Kolory komórek */
+        .vacation-day { background-color: #dbeafe !important; font-weight: 900; }
+        .sat-day { background-color: #fef9c3; } /* Żółty dla soboty */
+        .sun-day, .holiday { background-color: #fee2e2; } /* Czerwony dla niedziel i świąt */
+
+        .today {
+            outline: 3px solid #000000 !important;
+            outline-offset: -3px;
+            font-weight: 900;
+            z-index: 5;
+        }
+
+        #total-pool {
+            border: none !important;
+            background: transparent;
+            outline: none !important;
+            font-family: inherit;
+        }
+
+        input[type="date"], button {
+            border: 2px solid #000000 !important;
+            padding: 12px !important;
+            border-radius: 4px !important;
+        }
+
+        button { background-color: #000000 !important; color: #ffffff !important; }
+        
+        /* Wyjątek dla białego tekstu w nagłówku kalendarza */
+        .nav-label { color: #ffffff !important; }
+
+        .holiday-label { font-size: 0.5rem; text-align: center; line-height: 1; margin-top: 2px; }
+    </style>
+</head>
+<body>
+
+    <div class="w-full min-h-screen">
+        <header class="p-6 border-b-2 border-black bg-white">
+            <h1 class="text-2xl font-black uppercase leading-tight">Kalendarz Urlopowy</h1>
+            <p id="full-date-display" class="text-lg font-bold"></p>
+            <p id="current-week-display" class="text-20px font-bold uppercase tracking-widest opacity-100"></p>
+        </header>
+
+        <div class="w-full flex border-b-2 border-black">
+            <div class="flex-1 p-6 border-r-2 border-black text-center">
+                <span class="block text-[15px] font-bold uppercase mb-1">Pula urlopu</span>
+                <input type="number" id="total-pool" class="text-4xl font-black w-full text-center" value="26">
+            </div>
+            <div class="flex-1 p-6 text-center">
+                <span class="block text-[15px] font-bold uppercase mb-1">Pozostało dni</span>
+                <span id="remaining-days" class="text-4xl font-black">0</span>
+            </div>
+        </div>
+
+        <div class="flex justify-between items-center bg-black p-2">
+            <button onclick="moveMonth(-1)" class="!border-white !bg-transparent px-4 !text-white">◄</button>
+            <h2 id="month-year-label" class="nav-label font-bold text-[20px] uppercase"></h2>
+            <button onclick="moveMonth(1)" class="!border-white !bg-transparent px-4 !text-white">►</button>
+        </div>
+
+        <div class="w-full">
+            <div class="calendar-grid bg-slate-100 border-b border-black">
+                <div class="py-3 text-[12px] font-bold text-center border-r border-slate-300">TYDŹ</div>
+                <div class="py-3 text-[12px] font-bold text-center">PN</div>
+                <div class="py-3 text-[12px] font-bold text-center">WT</div>
+                <div class="py-3 text-[12px] font-bold text-center">ŚR</div>
+                <div class="py-3 text-[12px] font-bold text-center">CZ</div>
+                <div class="py-3 text-[12px] font-bold text-center">PT</div>
+                <div class="py-3 text-[12px] font-bold text-center text-red-600">SO</div>
+                <div class="py-3 text-[12px] font-bold text-center text-red-600">ND</div>
+            </div>
+            <div id="calendar-content" class="calendar-grid"></div>
+        </div>
+
+        <div class="p-6 bg-slate-50 border-t-2 border-black">
+            <div class="grid grid-cols-2 gap-4 mb-4">
+                <input type="date" id="date-start">
+                <input type="date" id="date-end">
+            </div>
+            <button onclick="addNewVacation()" class="w-full text-[22px] font-bold py-2 uppercase">Dodaj urlop</button>
+        </div>
+
+        <div class="p-6">
+            <h3 class="font-bold uppercase text-[20px] mb-4">Zaplanowany urlop:</h3>
+            <div id="vacation-list" class="space-y-2"></div>
+        </div>
+    </div>
+
+    <script>
+        let appState = {
+            pool: 26,
+            vacations: [],
+            viewDate: new Date()
+        };
+
+        const fixedHolidays = { "01-01": "Nowy Rok", "01-06": "Trzech Króli", "05-01": "Święto Pracy", "05-03": "Konstytucji 3 Maja", "08-15": "Wniebowzięcie", "11-01": "Wszystkich Świętych", "11-11": "Niepodległości", "12-25": "Boże Narodzenie", "12-26": "Boże Narodzenie" };
+        const movingHolidays2026 = { "2026-04-05": "Wielkanoc", "2026-04-06": "Poniedziałek Wielkanocny", "2026-05-24": "Zesłanie Ducha Św.", "2026-06-04": "Boże Ciało" };
+
+        function getHolidayName(date) {
+            const iso = date.toLocaleDateString('sv-SE');
+            const monthDay = iso.substring(5);
+            return movingHolidays2026[iso] || fixedHolidays[monthDay] || null;
+        }
+
+        function init() {
+            const saved = localStorage.getItem('vacation_v2_3');
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                appState.pool = parsed.pool || 26;
+                appState.vacations = parsed.vacations || [];
+            }
+            document.getElementById('total-pool').value = appState.pool;
+            updateTopDisplay();
+            renderAll();
+        }
+
+        function updateTopDisplay() {
+            const now = new Date();
+            const options = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' };
+            document.getElementById('full-date-display').innerText = now.toLocaleDateString('pl-PL', options);
+            document.getElementById('current-week-display').innerText = `Tydzień: ${getISOWeek(now)}`;
+        }
+
+        function getISOWeek(d) {
+            const tempDate = new Date(d.valueOf());
+            tempDate.setDate(tempDate.getDate() + 4 - (tempDate.getDay() || 7));
+            const yearStart = new Date(tempDate.getFullYear(), 0, 1);
+            return Math.ceil((((tempDate - yearStart) / 86400000) + 1) / 7);
+        }
+
+        function moveMonth(offset) {
+            appState.viewDate.setMonth(appState.viewDate.getMonth() + offset);
+            renderAll();
+        }
+
+        function renderCalendar() {
+            const container = document.getElementById('calendar-content');
+            container.innerHTML = '';
+            
+            const y = appState.viewDate.getFullYear();
+            const m = appState.viewDate.getMonth();
+            const todayStr = new Date().toLocaleDateString('sv-SE');
+            
+            const monthNames = ["Styczeń", "Luty", "Marzec", "Kwiecień", "Maj", "Czerwiec", "Lipiec", "Sierpień", "Wrzesień", "Październik", "Listopad", "Grudzień"];
+            document.getElementById('month-year-label').innerText = `${monthNames[m]} ${y}`;
+
+            const firstDay = new Date(y, m, 1);
+            const lastDay = new Date(y, m + 1, 0);
+            let startOffset = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1;
+
+            container.innerHTML += `<div class="calendar-cell week-num">${getISOWeek(firstDay)}</div>`;
+
+            for (let i = 0; i < startOffset; i++) {
+                container.innerHTML += `<div class="calendar-cell bg-slate-50"></div>`;
+            }
+
+            for (let d = 1; d <= lastDay.getDate(); d++) {
+                const dateObj = new Date(y, m, d);
+                const dateISO = dateObj.toLocaleDateString('sv-SE');
+                
+                if (dateObj.getDay() === 1 && d !== 1) {
+                    container.innerHTML += `<div class="calendar-cell week-num">${getISOWeek(dateObj)}</div>`;
+                }
+
+                const holidayName = getHolidayName(dateObj);
+                const isVacation = appState.vacations.some(v => dateISO >= v.start && dateISO <= v.end);
+                const dayOfWeek = dateObj.getDay();
+                const isToday = dateISO === todayStr;
+
+                let classes = "calendar-cell ";
+                if (dayOfWeek === 6) classes += "sat-day "; // Sobota
+                if (dayOfWeek === 0 || holidayName) classes += "sun-day "; // Niedziela lub święto
+                if (isVacation) classes += "vacation-day ";
+                if (isToday) classes += "today ";
+
+                container.innerHTML += `
+                    <div class="${classes}">
+                        <span class="text-sm font-bold">${d}</span>
+                        ${holidayName ? `<span class="holiday-label">${holidayName}</span>` : ''}
+                    </div>`;
+            }
+        }
+
+        function addNewVacation() {
+            const start = document.getElementById('date-start').value;
+            const end = document.getElementById('date-end').value;
+            if (!start || !end) return;
+
+            let count = 0;
+            let cur = new Date(start);
+            const stop = new Date(end);
+            
+            while (cur <= stop) {
+                const isHol = getHolidayName(cur);
+                const isWeek = cur.getDay() === 0 || cur.getDay() === 6;
+                if (!isHol && !isWeek) count++;
+                cur.setDate(cur.getDate() + 1);
+            }
+
+            appState.vacations.push({ id: Date.now(), start, end, count, week: getISOWeek(new Date(start)) });
+            saveAndRender();
+        }
+
+        function deleteVacation(id) {
+            appState.vacations = appState.vacations.filter(v => v.id !== id);
+            saveAndRender();
+        }
+
+        function saveAndRender() {
+            appState.pool = parseInt(document.getElementById('total-pool').value) || 0;
+            localStorage.setItem('vacation_v2_3', JSON.stringify(appState));
+            renderAll();
+        }
+
+        function renderAll() {
+            renderCalendar();
+            const used = appState.vacations.reduce((acc, v) => acc + v.count, 0);
+            document.getElementById('remaining-days').innerText = appState.pool - used;
+
+            const list = document.getElementById('vacation-list');
+            list.innerHTML = '';
+            
+            // SORTOWANIE CHRONOLOGICZNE (rosnąco po dacie startu)
+            appState.vacations.sort((a, b) => a.start.localeCompare(b.start));
+
+            appState.vacations.forEach(v => {
+                const d1 = v.start.split('-').reverse().join('.');
+                const d2 = v.end.split('-').reverse().join('.');
+                list.innerHTML += `
+                    <div class="border-2 border-black p-4 flex justify-between items-center bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+                        <div>
+                            <p class="font-bold text-[14px]">${d1} — ${d2}</p>
+                            <p class="text-[14px] uppercase font-bold opacity-80">Dni urlopu: ${v.count} • Tydz: ${v.week}</p>
+                        </div>
+                        <button onclick="deleteVacation(${v.id})" class="!py-1 !px-3 !text-[12px] !bg-white !text-black border-black font-black hover:!bg-red-500 hover:!text-white transition-colors">USUŃ</button>
+                    </div>`;
+            });
+        }
+
+        document.getElementById('total-pool').addEventListener('change', saveAndRender);
+        init();
+    </script>
+</body>
+</html>
