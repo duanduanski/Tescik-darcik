@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Kalendarz Mobilny Pro</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card-bg: #1e293b;
+            --accent: #38bdf8;
+            --text: #f8fafc;
+            --muted: #94a3b8;
+            --weekend: #fb7185;
+        }
+
+        /* Reset dla iOS i Androida */
+        * { 
+            box-sizing: border-box; 
+            margin: 0; 
+            padding: 0;
+            -webkit-tap-highlight-color: transparent; 
+        }
+
+        body {
+            font-family: -apple-system, system-ui, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            overflow-x: hidden; /* Blokada przewijania na boki */
+        }
+
+        /* WIDOK DNIA */
+        .day-view {
+            text-align: center;
+            padding: 40px 20px 20px 20px;
+            width: 100%;
+        }
+
+        #display-day-name { font-size: 1.5rem; font-weight: 800; text-transform: capitalize; color: var(--muted); }
+        #display-full-date { font-size: 1.5rem; font-weight: 700; margin: 5px 0; }
+        #display-week-info { font-size: 1.5rem; color: var(--accent); font-weight: 600; margin-bottom: 5px; }
+        #live-clock { font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; margin-bottom: 15px; }
+
+        .day-nav {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+        }
+
+        /* WIDOK MIESIĄCA - FIX DLA iPHONE */
+        .month-section {
+            width: 100%;
+            background: var(--card-bg);
+            flex-grow: 1;
+            border-top-left-radius: 30px;
+            border-top-right-radius: 30px;
+            padding: 20px 0;
+            margin-top: 10px;
+            /* Zapewnienie, że kontener nie wyjdzie poza ekran */
+            max-width: 100vw;
+        }
+
+        .month-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 15px 15px 15px;
+        }
+
+        .month-title {
+            font-size: 1.3rem;
+            font-weight: bold;
+            text-transform: capitalize;
+            color: var(--accent);
+        }
+
+        /* Kluczowa zmiana: ułamkowy podział zamiast px */
+        .calendar-grid {
+            display: grid;
+            /* 1 część na tydzień, po 2 części na dni tygodnia */
+            grid-template-columns: 0.8fr repeat(7, 1.2fr); 
+            width: 100%;
+            padding: 0; /* Usuwamy padding boczny grida */
+        }
+
+        .grid-header {
+            font-size: 1rem;
+            color: var(--muted);
+            font-weight: bold;
+            padding: 10px 0;
+            text-align: center;
+        }
+
+        .week-num-col { 
+            color: var(--muted); 
+            font-size: 1rem; 
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0,0,0,0.1); /* Delikatne tło dla numeru tygodnia */
+        }
+
+        .day-cell {
+            aspect-ratio: 1 / 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            margin: 2px;
+            border-radius: 50%;
+            transition: background 0.2s;
+        }
+
+        button {
+            background: rgba(255,255,255,0.08);
+            border: none;
+            color: var(--text);
+            padding: 10px 15px;
+            border-radius: 10px;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+
+        button:active { background: var(--accent); color: var(--bg); }
+
+        .weekend { color: var(--weekend); }
+        .other-month { opacity: 0.1; }
+        .is-today { background: var(--accent); color: var(--bg); font-weight: bold; }
+        .selected-day { border: 2px solid var(--accent); }
+
+    </style>
+</head>
+<body>
+
+    <div class="day-view">
+        <div id="display-day-name">---</div>
+        <div id="display-full-date">---</div>
+        <div id="display-week-info">Tydzień --</div>
+        <div id="live-clock">00:00:00</div>
+        
+        <div class="day-nav">
+            <button onclick="changeDay(-1)">Wstecz</button>
+            <button onclick="goToToday()" style="background: var(--accent); color: var(--bg);">Dziś</button>
+            <button onclick="changeDay(1)">Dalej</button>
+        </div>
+    </div>
+
+    <div class="month-section">
+        <div class="month-controls">
+            <button onclick="changeMonth(-1)">&larr;</button>
+            <div class="month-title" id="month-name-header">---</div>
+            <button onclick="changeMonth(1)">&rarr;</button>
+        </div>
+
+        <div class="calendar-grid" id="calendar-grid">
+            <div class="grid-header">Ty</div>
+            <div class="grid-header">Pn</div>
+            <div class="grid-header">Wt</div>
+            <div class="grid-header">Śr</div>
+            <div class="grid-header">Cz</div>
+            <div class="grid-header">Pt</div>
+            <div class="grid-header">So</div>
+            <div class="grid-header">Nd</div>
+        </div>
+    </div>
+
+    <script>
+        let currentViewDate = new Date();
+        const realToday = new Date();
+
+        function updateUI() {
+            const d = currentViewDate;
+            document.getElementById('display-day-name').textContent = d.toLocaleDateString('pl-PL', { weekday: 'long' });
+            document.getElementById('display-full-date').textContent = `${d.getDate()} ${d.toLocaleDateString('pl-PL', { month: 'long' })} ${d.getFullYear()}`;
+            document.getElementById('display-week-info').textContent = `Tydzień ${getISOWeek(d)}`;
+            renderMonthGrid();
+        }
+
+        function renderMonthGrid() {
+            const grid = document.getElementById('calendar-grid');
+            const headerMonth = document.getElementById('month-name-header');
+            const headers = grid.querySelectorAll('.grid-header');
+            grid.innerHTML = '';
+            headers.forEach(h => grid.appendChild(h));
+
+            headerMonth.textContent = currentViewDate.toLocaleDateString('pl-PL', { month: 'long', year: 'numeric' });
+
+            const firstDayOfMonth = new Date(currentViewDate.getFullYear(), currentViewDate.getMonth(), 1);
+            let startDay = firstDayOfMonth.getDay() || 7; 
+            let drawDate = new Date(firstDayOfMonth);
+            drawDate.setDate(drawDate.getDate() - (startDay - 1));
+
+            for (let i = 0; i < 42; i++) {
+                if (i % 7 === 0) {
+                    const weekBox = document.createElement('div');
+                    weekBox.className = 'week-num-col';
+                    weekBox.textContent = getISOWeek(drawDate);
+                    grid.appendChild(weekBox);
+                }
+
+                const dayBox = document.createElement('div');
+                dayBox.className = 'day-cell';
+                dayBox.textContent = drawDate.getDate();
+
+                if (drawDate.getDay() === 0 || drawDate.getDay() === 6) dayBox.classList.add('weekend');
+                if (drawDate.getMonth() !== currentViewDate.getMonth()) dayBox.classList.add('other-month');
+                if (drawDate.toDateString() === realToday.toDateString()) dayBox.classList.add('is-today');
+                if (drawDate.toDateString() === currentViewDate.toDateString()) dayBox.classList.add('selected-day');
+
+                const clickedDate = new Date(drawDate);
+                dayBox.onclick = () => {
+                    currentViewDate = clickedDate;
+                    updateUI();
+                };
+
+                grid.appendChild(dayBox);
+                drawDate.setDate(drawDate.getDate() + 1);
+            }
+        }
+
+        function getISOWeek(d) {
+            let date = new Date(d.getTime());
+            date.setHours(0, 0, 0, 0);
+            date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7);
+            let week1 = new Date(date.getFullYear(), 0, 4);
+            return 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
+        }
+
+        function changeDay(delta) {
+            currentViewDate.setDate(currentViewDate.getDate() + delta);
+            updateUI();
+        }
+
+        function changeMonth(delta) {
+            currentViewDate.setMonth(currentViewDate.getMonth() + delta, 1);
+            updateUI();
+        }
+
+        function goToToday() {
+            currentViewDate = new Date(realToday);
+            updateUI();
+        }
+
+        setInterval(() => {
+            const now = new Date();
+            document.getElementById('live-clock').textContent = now.toLocaleTimeString('pl-PL');
+        }, 1000);
+
+        updateUI();
+    </script>
+</body>
+</html>
