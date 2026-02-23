@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Kalendarz Inżynierski</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card-bg: #1e293b;
+            --accent: #38bdf8;
+            --text: #f8fafc;
+            --muted: #94a3b8;
+            --weekend: #fb7185;
+        }
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, system-ui, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        /* Sekcja górna - Widok Dnia */
+        .day-view {
+            text-align: center;
+            padding: 20px 20px;
+            width: 100%;
+            background: linear-gradient(180deg, rgba(30,41,59,0.5) 0%, rgba(15,23,42,1) 100%);
+        }
+
+        #display-day-name { font-size: 1.5rem; font-weight: 800; text-transform: capitalize; color: var(--muted); }
+        #display-full-date { font-size: 1.5rem; font-weight: 700; margin: 5px 0; }
+        #display-week-info { font-size: 1.4rem; color: var(--accent); font-weight: 600; margin-bottom: 10px; }
+        
+        /* Zmniejszona czcionka zegara */
+        #live-clock { 
+            font-size: 1.2rem; 
+            font-weight: 700; 
+            font-variant-numeric: tabular-nums; 
+            opacity: 0.9;
+        }
+
+        /* Nawigacja Dnia */
+        .day-nav {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            justify-content: center;
+        }
+
+        /* Widok Miesiąca - Pełna szerokość */
+        .month-section {
+            width: 100%;
+            background: var(--card-bg);
+            flex-grow: 1;
+            border-top-left-radius: 25px;
+            border-top-right-radius: 25px;
+            padding: 20px 0;
+            margin-top: 10px;
+            box-shadow: 0 -10px 20px rgba(0,0,0,0.2);
+        }
+
+        .month-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 20px 20px 20px;
+        }
+
+        .month-title {
+            font-size: 1.5rem;
+            font-weight: bold;
+            text-transform: capitalize;
+            color: var(--accent);
+        }
+
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: 35px repeat(7, 1fr);
+            width: 100%;
+            padding: 0 5px;
+        }
+
+        .grid-header {
+            font-size: 1rem;
+            color: var(--muted);
+            font-weight: bold;
+            padding: 10px 0;
+            text-align: center;
+            text-transform: uppercase;
+        }
+
+        .week-num-col { 
+            color: var(--muted); 
+            font-size: 1.1rem; 
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-right: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .day-cell {
+            aspect-ratio: 1 / 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+            border-radius: 50%;
+            margin: 2px;
+            transition: 0.2s;
+        }
+
+        button {
+            background: rgba(255,255,255,0.1);
+            border: none;
+            color: var(--text);
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: bold;
+        }
+
+        button:active { background: var(--accent); }
+
+        .weekend { color: var(--weekend); }
+        .other-month { opacity: 0.15; }
+        .is-today { background: var(--accent); color: var(--bg); font-weight: bold; }
+        .selected-day { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+        @media (max-width: 360px) {
+            #display-full-date { font-size: 1.5rem; }
+            #live-clock { font-size: 1.5rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="day-view">
+        <div id="display-day-name">---</div>
+        <div id="display-full-date">---</div>
+        <div id="display-week-info">Tydzień --</div>
+        <div id="live-clock">00:00:00</div>
+        
+        <div class="day-nav">
+            <button onclick="changeDay(-1)">Poprzedni</button>
+            <button onclick="goToToday()" style="background: var(--accent); color: var(--bg);">Dziś</button>
+            <button onclick="changeDay(1)">Następny</button>
+        </div>
+    </div>
+
+    <div class="month-section">
+        <div class="month-controls">
+            <button onclick="changeMonth(-1)">&larr;</button>
+            <div class="month-title" id="month-name-header">Marzec 2026</div>
+            <button onclick="changeMonth(1)">&rarr;</button>
+        </div>
+
+        <div class="calendar-grid" id="calendar-grid">
+            <div class="grid-header">Ty</div>
+            <div class="grid-header">Pn</div>
+            <div class="grid-header">Wt</div>
+            <div class="grid-header">Śr</div>
+            <div class="grid-header">Cz</div>
+            <div class="grid-header">Pt</div>
+            <div class="grid-header">So</div>
+            <div class="grid-header">Nd</div>
+            </div>
+    </div>
+
+    <script>
+        let currentViewDate = new Date();
+        const realToday = new Date();
+
+        function updateUI() {
+            const d = currentViewDate;
+            
+            // Górny panel
+            document.getElementById('display-day-name').textContent = d.toLocaleDateString('pl-PL', { weekday: 'long' });
+            document.getElementById('display-full-date').textContent = `${d.getDate()} ${d.toLocaleDateString('pl-PL', { month: 'long' })} ${d.getFullYear()}`;
+            document.getElementById('display-week-info').textContent = `Tydzień ${getISOWeek(d)}`;
+
+            renderMonthGrid();
+        }
+
+        function renderMonthGrid() {
+            const grid = document.getElementById('calendar-grid');
+            const headerMonth = document.getElementById('month-name-header');
+            
+            // Zachowaj nagłówki
+            const headers = grid.querySelectorAll('.grid-header');
+            grid.innerHTML = '';
+            headers.forEach(h => grid.appendChild(h));
+
+            headerMonth.textContent = currentViewDate.toLocaleDateString('pl-PL', { month: 'long', year: 'numeric' });
+
+            const firstDayOfMonth = new Date(currentViewDate.getFullYear(), currentViewDate.getMonth(), 1);
+            let startDay = firstDayOfMonth.getDay() || 7; 
+            let paddingDays = startDay - 1;
+
+            let drawDate = new Date(firstDayOfMonth);
+            drawDate.setDate(drawDate.getDate() - paddingDays);
+
+            for (let i = 0; i < 42; i++) {
+                if (i % 7 === 0) {
+                    const weekBox = document.createElement('div');
+                    weekBox.className = 'week-num-col';
+                    weekBox.textContent = getISOWeek(drawDate);
+                    grid.appendChild(weekBox);
+                }
+
+                const dayBox = document.createElement('div');
+                dayBox.className = 'day-cell';
+                dayBox.textContent = drawDate.getDate();
+
+                if (drawDate.getDay() === 0 || drawDate.getDay() === 6) dayBox.classList.add('weekend');
+                if (drawDate.getMonth() !== currentViewDate.getMonth()) dayBox.classList.add('other-month');
+                if (drawDate.toDateString() === realToday.toDateString()) dayBox.classList.add('is-today');
+                if (drawDate.toDateString() === currentViewDate.toDateString()) dayBox.classList.add('selected-day');
+
+                // Pozwól kliknąć dzień w kalendarzu, aby go wybrać
+                const tempDate = new Date(drawDate);
+                dayBox.onclick = () => {
+                    currentViewDate = tempDate;
+                    updateUI();
+                };
+
+                grid.appendChild(dayBox);
+                drawDate.setDate(drawDate.getDate() + 1);
+            }
+        }
+
+        function getISOWeek(d) {
+            let date = new Date(d.getTime());
+            date.setHours(0, 0, 0, 0);
+            date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7);
+            let week1 = new Date(date.getFullYear(), 0, 4);
+            return 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
+        }
+
+        function changeDay(delta) {
+            currentViewDate.setDate(currentViewDate.getDate() + delta);
+            updateUI();
+        }
+
+        function changeMonth(delta) {
+            // Ustawiamy na 1-szy dzień nowego miesiąca, aby uniknąć błędów przy 31 dniach
+            currentViewDate.setMonth(currentViewDate.getMonth() + delta, 1);
+            updateUI();
+        }
+
+        function goToToday() {
+            currentViewDate = new Date(realToday);
+            updateUI();
+        }
+
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('live-clock').textContent = now.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        }
+
+        setInterval(updateClock, 1000);
+        updateClock();
+        updateUI();
+    </script>
+</body>
+</html>
